@@ -23,6 +23,8 @@ I did not invent any thing new ,just makes better usage for existing things.
 
 ```text
 
+
+
    can be any                   agent executable             can be any p2p
 http exposed website            runs locally               file share backend
 +------------------+        +--------------------+        +-----------------+ 
@@ -34,6 +36,25 @@ http exposed website            runs locally               file share backend
       better support big file access by exposing a universal http front
 
 ```
+
+
+for example, when our agent is running on 127.0.0.1:7788 , you can embedded
+a video which stream video from following url:
+
+http://127.0.0.1:7788/bittorrent/magnet/c12fe1c06bba254a9dc9f519b335aa7c1367a88a/video.mp4
+
+or even embedd a image from archiver as:
+
+http://127.0.0.1:7788/bittorrent/magnet/c12fe1c06bba254a9dc9f519b335aa7c1367a88a/a.zip/1.jpg
+
+these file will be download,unpacked by our agent, and stream as these urls.
+
+
+with different backend ,we can also access any p2p protocol file ,for example ipfs backend:
+
+http://127.0.0.1:7788/ipfs/QmarHSr9aSNaPSR6G9KFPbuLV9aEqJfTk1y9B8pdwqK4Rq/myfile.mp3
+
+
 
 to archive this goal , our universal http front should fulfill following restrictions:
 
@@ -52,8 +73,17 @@ to archive this goal , our universal http front should fulfill following restric
 
 
 not goals:(at least at beginning)
+
 1. be a full feature p2p download control client
                 
 
+considerations:
+
+magnet provides a universal URI already, but not all p2p use it, and our agent
+needs different backend for different protocol,
+
+
+
 my first try will based on go-peerflix, it already provides http stream ability.
-only needs http access parse 
+only needs http access dispatcher
+
