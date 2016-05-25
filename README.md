@@ -21,6 +21,7 @@ http streamable for any p2p website.
 
 I did not invent any thing new ,just makes better usage for existing things.
 
+```text
 
    can be any                   agent executable             can be any p2p
 http exposed website            runs locally               file share backend
@@ -31,6 +32,8 @@ http exposed website            runs locally               file share backend
 +------------------+        +--------------------+        +-----------------+ 
      
       better support big file access by exposing a universal http front
+
+```
 
 to archive this goal , our universal http front should fulfill following restrictions:
 
