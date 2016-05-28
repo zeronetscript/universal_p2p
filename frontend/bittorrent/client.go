@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"regexp"
@@ -115,70 +114,58 @@ func (c *Client) addBlocklist() {
 	}
 
 	if err != nil {
-		log.Printf("Error downloading blocklist: %s", err)
 		return
 	}
 
 	// Load blocklist.
 	blocklistReader, err := os.Open(blocklistPath)
 	if err != nil {
-		log.Printf("Error opening blocklist: %s", err)
 		return
 	}
 
 	// Extract file.
 	gzipReader, err := gzip.NewReader(blocklistReader)
 	if err != nil {
-		log.Printf("Error extracting blocklist: %s", err)
 		return
 	}
 
 	// Read as iplist.
 	blocklist, err := iplist.NewFromReader(gzipReader)
 	if err != nil {
-		log.Printf("Error reading blocklist: %s", err)
 		return
 	}
 
-	log.Printf("Setting blocklist.\nFound %d ranges\n", blocklist.NumRanges())
 	c.Client.SetIPBlockList(blocklist)
 }
 
 func downloadBlockList(blocklistPath string) (err error) {
-	log.Printf("Downloading blocklist")
 	fileName, err := downloadFile(torrentBlockListURL)
 	if err != nil {
-		log.Printf("Error downloading blocklist: %s\n", err)
 		return
 	}
 
 	// Ungzip file.
 	in, err := os.Open(fileName)
 	if err != nil {
-		log.Printf("Error extracting blocklist: %s\n", err)
 		return
 	}
 	defer func() {
 		if err = in.Close(); err != nil {
-			log.Printf("Error closing the blocklist gzip file: %s", err)
 		}
 	}()
 
 	// Write to file.
 	out, err := os.Create(blocklistPath)
 	if err != nil {
-		log.Printf("Error writing blocklist: %s\n", err)
 		return
 	}
 	defer func() {
 		if err = out.Close(); err != nil {
-			log.Printf("Error closing the blocklist file: %s", err)
 		}
 	}()
 
 	_, err = io.Copy(out, in)
 	if err != nil {
-		log.Printf("Error writing the blocklist file: %s", err)
 		return
 	}
 
@@ -279,7 +266,6 @@ func (c Client) GetFile(w http.ResponseWriter, r *http.Request) {
 
 	defer func() {
 		if err := entry.Close(); err != nil {
-			log.Printf("Error closing file reader: %s\n", err)
 		}
 	}()
 
@@ -305,7 +291,6 @@ func downloadFile(URL string) (fileName string, err error) {
 
 	defer func() {
 		if err = file.Close(); err != nil {
-			log.Printf("Error closing torrent file: %s", err)
 		}
 	}()
 
@@ -316,7 +301,6 @@ func downloadFile(URL string) (fileName string, err error) {
 
 	defer func() {
 		if err = response.Body.Close(); err != nil {
-			log.Printf("Error closing torrent file: %s", err)
 		}
 	}()
 

@@ -41,11 +41,16 @@ http exposed website            runs locally               file share backend
 for example, when our agent is running on 127.0.0.1:7788 , you can embedded
 a video which stream video from following url:
 
-http://127.0.0.1:7788/bittorrent/magnet/c12fe1c06bba254a9dc9f519b335aa7c1367a88a/video.mp4
+http://127.0.0.1:7788/bittorrent/stream/c12fe1c06bba254a9dc9f519b335aa7c1367a88a/video.mp4
+
+or simply without specified filename ,just stream the biggest file(most case for video torrent):
+
+http://127.0.0.1:7788/bittorrent/stream/c12fe1c06bba254a9dc9f519b335aa7c1367a88a
+(this ideal comes from go-peerflix)
 
 or even embedd a image from archiver as:
 
-http://127.0.0.1:7788/bittorrent/magnet/c12fe1c06bba254a9dc9f519b335aa7c1367a88a/a.zip/1.jpg
+http://127.0.0.1:7788/bittorrent/stream/c12fe1c06bba254a9dc9f519b335aa7c1367a88a/a.zip/1.jpg
 
 these file will be download,unpacked by our agent, and stream as these urls.
 
@@ -79,8 +84,23 @@ not goals:(at least at beginning)
 
 considerations:
 
-magnet provides a universal URI already, but not all p2p use it, and our agent
-needs different backend for different protocol,
+
+why not use magnet?
+magnet provides a universal URI for different p2p protocol already, but not 
+all p2p use it, so I'd prefer a simple way.
+
+security?
+one site should only view/control p2p content of itself, but universal_p2p can not
+knows which site current stream request from . I think any site should ask
+universal_p2p for a token (for example, access http://127.0.0.1:8888/get_token)
+and access/control p2p content with this token.but this is not straightforward 
+for simple usage. so currently only expose "stream" , all GC controlled by 
+universal_p2p. 
+
+another problem is that universal_p2p should track all site usage ,but request
+is made from client browser,not site itself. so there is no way to tell which 
+resource the site belongs to.this problem left as open. 
+
 
 
 
