@@ -48,18 +48,7 @@ func init() {
 	backend.RegisterBackend(&BittorrentBackend)
 }
 
-func Resources(this *Backend) []*backend.P2PResource {
-	return nil
-}
-
-func SeedExternal(this *Backend, path string) {
-}
-
-func Stream(this *Backend, w io.Writer, res *backend.P2PResource) {
-
-}
-
-func (this *Backend) AddTorrentInfoHash(infoHash string) error {
+func (this *Backend) AddTorrentInfoHash(infoHash string) (*Resource, error) {
 	{
 		this.rwLock.RLock()
 		defer this.rwLock.RUnlock()
@@ -69,7 +58,7 @@ func (this *Backend) AddTorrentInfoHash(infoHash string) error {
 			log.Debugf("%s already exist", infoHash)
 			// we didin't change struct ,no need to lock write
 			resource.lastAccess = time.Now()
-			return nil
+			return resource, nil
 		}
 	}
 
@@ -81,10 +70,10 @@ func (this *Backend) AddTorrentInfoHash(infoHash string) error {
 	if err != nil {
 		errStr := fmt.Sprintf("access path %s is not a valid info hash", infoHash)
 		log.Errorf(errStr)
-		return errors.New(errStr)
+		return nil, errors.New(errStr)
 	}
 
-	var t torrent.Torrent
+	var t *torrent.Torrent
 
 	{
 		this.rwLock.Lock()
@@ -93,57 +82,79 @@ func (this *Backend) AddTorrentInfoHash(infoHash string) error {
 		t, new := this.client.AddTorrentInfoHash(hash)
 		if !new {
 			log.Debugf("other goroutine is also adding %s", infoHash)
-			return nil
+
+			//TODO needs test ?
+			if t.Info() == nil {
+				panic("logic error")
+			}
+
+			ret := CreateFromTorrent(t)
+			this.resources[infoHash] = ret
+			return ret, nil
 		}
 
 		info := t.Info()
 		if info != nil {
 			//already got
 			log.Debugf("info already got for %s", infoHash)
-			this.resources[infoHash] = CreateFromInfo(info)
-			return nil
+			ret := CreateFromTorrent(t)
+			this.resources[infoHash] = ret
+			return ret, nil
 		}
 		//we add this first, wait get info complete
 	}
 
-	var lock sync.Mutex
-	cond := sync.NewCond(&lock)
+	<-t.GotInfo()
 
-	got := false
-
-	go func() {
-		<-t.GotInfo()
-
-		lock.Lock()
-		got = true
-		lock.Unlock()
-		log.Debugf("torrent downloaded...")
-		cond.Signal()
-	}()
-
-	lock.Lock()
-	if !got {
-		log.Debugf("waiting torrent downloaded...")
-		cond.Wait()
-		log.Debugf("waiting complete ...")
-	}
-	lock.Unlock()
+	log.Debugf("torrent downloaded...")
 
 	this.rwLock.Lock()
 	defer this.rwLock.Unlock()
-	this.resources[infoHash] = CreateFromInfo(t.Info())
+	ret := CreateFromTorrent(t)
+	this.resources[infoHash] = ret
 
-	return nil
+	return ret, nil
 }
 
-func (this *Backend) Command(w io.Writer, r *backend.CommonRequest) {}
+func (this *Backend) Command(w io.Writer, r *backend.CommonRequest) {
+	panic("not implemented")
+}
 
 func (this *Backend) IterateRootResources(iterFunc backend.ResourceIterFunc) {
 	this.rwLock.RLock()
-	for _, v := range this.resources {
-		iterFunc(v)
-	}
 	defer this.rwLock.RUnlock()
+	for _, v := range this.resources {
+		if iterFunc(v) {
+			v.lastAccess = time.Now()
+		}
+	}
+}
+
+func (this *Backend) IterateSubResources(res backend.P2PResource, iterFunc backend.ResourceIterFunc) error {
+	this.rwLock.RLock()
+	defer this.rwLock.RUnlock()
+
+	v, exist := this.resources[res.RootURL()]
+
+	if res.Protocol() != this.Protocol() {
+		errStr := fmt.Sprintf("res protocol %s not same as my protocol", res.Protocol(), this.Protocol())
+		log.Errorf(errStr)
+		return errors.New(errStr)
+	}
+
+	if !exist {
+		errStr := fmt.Sprintf("unknown resource %s", res.RootURL())
+		log.Errorf(errStr)
+		return errors.New(errStr)
+	}
+
+	for _, r := range v.subResources {
+
+		if iterFunc(r) {
+			r.lastAccess = time.Now()
+		}
+	}
+	return nil
 }
 
 func (this *Backend) Recycle(r *backend.P2PResource) {

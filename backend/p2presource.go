@@ -11,16 +11,15 @@ type P2PResource interface {
 	//or if total size unknown currently , return -1
 	Size() int64
 	//return currently used disk size (0 if not downloaded any)
-	DiskUsage() uint64
+	DiskUsage() int64
 	//how much downloaded .p2p may allocate whole file but only used a little
-	DownloadedSize() uint64
+	DownloadedSize() int64
 	//for collect history status, for recycle
 	LastAccess() time.Time
 	//for bittorrent , this is the "torrent" which contains all sub resources
 	IsRoot() bool
 	// unique URL to identify .for bittorrent, this is the info hash
 	RootURL() string
-
 	//only sub resource have path
-	Path() string
+	Path() []string
 }

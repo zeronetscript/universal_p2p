@@ -1,19 +1,17 @@
 package frontend
 
 import (
-	"fmt"
 	"github.com/juju/loggo"
 	"github.com/zeronetscript/universal_p2p/backend"
-	"io"
-	"path"
+	"net/http"
 )
 
 var frontLog = loggo.GetLogger("frontend")
 
 type HttpFrontend interface {
-	Protocolize
+	backend.Protocolize
 	SubVersion() string
-	HandleRequest(io.Writer, *backend.CommonRequest)
+	HandleRequest(http.ResponseWriter, interface{})
 }
 
 var AllFrontEnd map[string]HttpFrontend
