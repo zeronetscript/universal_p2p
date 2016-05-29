@@ -35,6 +35,7 @@ func init() {
 
 	cfg := &torrent.Config{
 		DataDir: backend.GetProtocolRootPath(&BittorrentBackend),
+		Debug:   true,
 	}
 
 	var err error

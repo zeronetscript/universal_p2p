@@ -20,7 +20,7 @@ type P2PBackend interface {
 	Recycle(*P2PResource)
 }
 
-var AllBackend map[string]P2PBackend
+var AllBackend map[string]P2PBackend = make(map[string]P2PBackend)
 
 func RegisterBackend(backend P2PBackend) bool {
 

@@ -11,14 +11,14 @@ var frontLog = loggo.GetLogger("frontend")
 type HttpFrontend interface {
 	backend.Protocolize
 	SubVersion() string
-	HandleRequest(http.ResponseWriter, interface{})
+	HandleRequest(http.ResponseWriter, *http.Request, interface{})
 }
 
-var AllFrontEnd map[string]HttpFrontend
+var AllFrontEnd map[string]HttpFrontend = make(map[string]HttpFrontend)
 
 func RegisterFrontend(frontend HttpFrontend) bool {
 
-	frontLog.Debugf("try to register frontend %s", frontend.Protocol())
+	frontLog.Debugf("try to register frontend Protocol :%s,SubVersion: %s", frontend.Protocol(), frontend.SubVersion())
 
 	_, exist := AllFrontEnd[frontend.Protocol()]
 

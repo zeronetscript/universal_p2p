@@ -20,9 +20,8 @@ func parseHttpRequest(URL string) (commonRequest backend.CommonRequest, pathArra
 
 	allPathArray := strings.Split(trimmed, slash)
 
-	if len(pathArray) < 3 {
-		errStr := fmt.Sprintf("url access path is %s, less than needed (at least 3)", trimmed)
-		dispatchLog.Errorf(errStr)
+	if len(allPathArray) < 3 {
+		errStr := fmt.Sprintf("url access path is '%s', less than needed (at least 3)", trimmed)
 		return backend.CommonRequest{}, nil, errors.New(errStr)
 	}
 
@@ -69,7 +68,7 @@ func Dispatch(w http.ResponseWriter, request *http.Request) {
 	if request.Method == "GET" {
 		parsedRequest = &backend.AccessRequest{
 			CommonRequest: commonRequest,
-			SubPath:       pathArray[3:],
+			SubPath:       pathArray,
 		}
 	} else {
 		dispatchLog.Criticalf("POST data upload read not implemented")
@@ -89,5 +88,5 @@ func Dispatch(w http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	frontend.HandleRequest(w, parsedRequest)
+	frontend.HandleRequest(w, request, parsedRequest)
 }

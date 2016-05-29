@@ -2,7 +2,6 @@ package frontend
 
 import (
 	"github.com/juju/loggo"
-	_ "github.com/zeronetscript/universal_p2p/frontend/bittorrent"
 	"net/http"
 	"strconv"
 )
@@ -23,7 +22,7 @@ func StartHttpServer() {
 
 	httpLog.Infof("start listening: 7788")
 
-	http.HandleFunc("/*", Dispatch)
+	http.HandleFunc("/", Dispatch)
 
 	err := http.ListenAndServe(host+":"+strconv.Itoa(port), nil)
 	if err != nil {

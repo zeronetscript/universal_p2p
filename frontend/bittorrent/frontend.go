@@ -6,6 +6,7 @@ import (
 	"github.com/juju/loggo"
 	"github.com/zeronetscript/universal_p2p/backend"
 	"github.com/zeronetscript/universal_p2p/backend/bittorrent"
+	"github.com/zeronetscript/universal_p2p/frontend"
 	"net/http"
 	"time"
 )
@@ -16,11 +17,15 @@ type Frontend struct {
 	backend *bittorrent.Backend
 }
 
-func Protocol(this *Frontend) string {
+var bittorrentFrontend Frontend = Frontend{
+	backend: &bittorrent.BittorrentBackend,
+}
+
+func (this *Frontend) Protocol() string {
 	return bittorrent.PROTOCOL
 }
 
-func SubVersion(this *Frontend) string {
+func (this *Frontend) SubVersion() string {
 	return "v0"
 }
 
@@ -104,7 +109,7 @@ func (this *Frontend) Stream(w http.ResponseWriter,
 
 }
 
-func HandleRequest(this *Frontend, w http.ResponseWriter, r *http.Request, request interface{}) {
+func (this *Frontend) HandleRequest(w http.ResponseWriter, r *http.Request, request interface{}) {
 
 	access := request.(*backend.AccessRequest)
 
@@ -121,4 +126,8 @@ func HandleRequest(this *Frontend, w http.ResponseWriter, r *http.Request, reque
 		http.Error(w, "unsupport", http.StatusInternalServerError)
 	}
 
+}
+
+func init() {
+	frontend.RegisterFrontend(&bittorrentFrontend)
 }
