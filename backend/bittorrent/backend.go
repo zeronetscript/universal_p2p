@@ -27,7 +27,9 @@ func (this Backend) Protocol() string {
 	return PROTOCOL
 }
 
-var BittorrentBackend Backend
+var BittorrentBackend Backend = Backend{
+	resources: make(map[string]*Resource),
+}
 
 var log = loggo.GetLogger("bittorrent")
 
@@ -49,40 +51,58 @@ func init() {
 	backend.RegisterBackend(&BittorrentBackend)
 }
 
-func (this *Backend) AddTorrentInfoHash(infoHash string) (*Resource, error) {
-	{
-		this.rwLock.RLock()
-		defer this.rwLock.RUnlock()
-		resource, exist := this.resources[infoHash]
-		if exist {
+func (this *Backend) AddTorrentHashOrSpec(hashOrSpec interface{}) (*Resource, error) {
 
-			log.Debugf("%s already exist", infoHash)
+	hash, isHash := hashOrSpec.(*metainfo.Hash)
+	var hashHexString string
+	var torrentSpec *torrent.TorrentSpec
+	if isHash {
+		hashHexString = hash.HexString()
+	} else {
+		torrentSpec = hashOrSpec.(*torrent.TorrentSpec)
+	}
+
+	if isHash {
+		log.Tracef("wlock")
+		this.rwLock.Lock()
+		func() {
+			log.Tracef("wunlock")
+			defer this.rwLock.Unlock()
+		}()
+		resource, exist := this.resources[hashHexString]
+		if exist {
+			log.Debugf("%s already exist", hashHexString)
 			// we didin't change struct ,no need to lock write
 			resource.lastAccess = time.Now()
 			return resource, nil
 		}
-	}
-
-	var hash metainfo.Hash
-
-	log.Infof("try to add torrent for %s", infoHash)
-
-	err := hash.FromHexString(infoHash)
-	if err != nil {
-		errStr := fmt.Sprintf("access path %s is not a valid info hash", infoHash)
-		log.Errorf(errStr)
-		return nil, errors.New(errStr)
+		log.Debugf("%s not exist", hashHexString)
 	}
 
 	var t *torrent.Torrent
 
 	{
+		log.Tracef("wlock")
 		this.rwLock.Lock()
-		defer this.rwLock.Unlock()
+		func() {
+			log.Tracef("wunlock")
+			defer this.rwLock.Unlock()
+		}()
+
 		var new bool
-		t, new := this.client.AddTorrentInfoHash(hash)
+		if isHash {
+			t, new = this.client.AddTorrentInfoHash(*hash)
+			t.AddTrackers(DefaultTrackers)
+		} else {
+			var err error
+			t, new, err = this.client.AddTorrentSpec(torrentSpec)
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		if !new {
-			log.Debugf("other goroutine is also adding %s", infoHash)
+			log.Debugf("other goroutine is also adding %s", hashHexString)
 
 			//TODO needs test ?
 			if t.Info() == nil {
@@ -90,29 +110,37 @@ func (this *Backend) AddTorrentInfoHash(infoHash string) (*Resource, error) {
 			}
 
 			ret := CreateFromTorrent(t)
-			this.resources[infoHash] = ret
+			this.resources[hashHexString] = ret
 			return ret, nil
+		} else {
+			log.Tracef("this is new added torrent,%s", t)
 		}
 
 		info := t.Info()
 		if info != nil {
 			//already got
-			log.Debugf("info already got for %s", infoHash)
+			log.Debugf("info already got for %s", hashHexString)
 			ret := CreateFromTorrent(t)
-			this.resources[infoHash] = ret
+			this.resources[hashHexString] = ret
 			return ret, nil
 		}
 		//we add this first, wait get info complete
 	}
 
+	log.Tracef("call GotInfo")
 	<-t.GotInfo()
+	log.Tracef("GotInfo completed")
 
 	log.Debugf("torrent downloaded...")
 
+	log.Tracef("wLock")
 	this.rwLock.Lock()
-	defer this.rwLock.Unlock()
+	func() {
+		log.Tracef("wunLock")
+		this.rwLock.Unlock()
+	}()
 	ret := CreateFromTorrent(t)
-	this.resources[infoHash] = ret
+	this.resources[hashHexString] = ret
 
 	return ret, nil
 }

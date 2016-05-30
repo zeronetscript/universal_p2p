@@ -3,6 +3,7 @@ package bittorrent
 import (
 	"fmt"
 	"github.com/anacrolix/torrent"
+	"github.com/anacrolix/torrent/metainfo"
 	"github.com/juju/loggo"
 	"github.com/zeronetscript/universal_p2p/backend"
 	"github.com/zeronetscript/universal_p2p/backend/bittorrent"
@@ -60,7 +61,36 @@ func pathEqual(a, b []string) bool {
 func (this *Frontend) Stream(w http.ResponseWriter,
 	r *http.Request, access *backend.AccessRequest) {
 
-	rootRes, err := this.backend.AddTorrentInfoHash(access.SubPath[0])
+	var hashOrSpec interface{}
+	if len(access.SubPath[0]) == 40 {
+		log.Debugf("try to parse %s as info hash", access.SubPath[0])
+		var hash metainfo.Hash
+		var err error
+		err = hash.FromHexString(access.SubPath[0])
+		if err != nil {
+			errStr := fmt.Sprintf("%s is not a info hash", access.SubPath[0])
+			log.Errorf(errStr)
+			http.Error(w, errStr, 404)
+			return
+		}
+		log.Debugf("seems %s is a magnet infohash", access.SubPath[0])
+		hashOrSpec = &hash
+	}
+
+	if hashOrSpec == nil {
+		//not 20 hex string, can be a encodeURIComponent magnet link
+		log.Debugf("trying to parse %s as encodeURIComponent magnet link", access.SubPath[0])
+
+		var err error
+		hashOrSpec, err = torrent.TorrentSpecFromMagnetURI(access.SubPath[0])
+		if err != nil {
+			errStr := fmt.Sprintf("%s is not a encodeURIComponent encoded magnet link", access.SubPath[0])
+			http.Error(w, errStr, 404)
+			return
+		}
+	}
+
+	rootRes, err := this.backend.AddTorrentHashOrSpec(hashOrSpec)
 
 	if err != nil {
 		log.Errorf(err.Error())

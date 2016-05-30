@@ -15,7 +15,7 @@ type Resource struct {
 
 func CreateFromTorrent(t *torrent.Torrent) *Resource {
 
-	log.Debugf("create resource wrapper for torrent %s", t)
+	log.Debugf("create resource wrapper for torrent %s", t.Info().Hash())
 
 	root := &Resource{
 		lastAccess: time.Now(),
