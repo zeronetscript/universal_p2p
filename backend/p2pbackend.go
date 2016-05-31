@@ -43,7 +43,14 @@ func RegisterBackend(backend P2PBackend) bool {
 //should get needed resource and return,not do block operator inside
 type ResourceIterFunc func(P2PResource) bool
 
-func GetProtocolRootPath(i Protocolize) string {
+func GetDownloadRootPath(i Protocolize) string {
+	return path.Join(GetProtocolRootPath(i), "download")
+}
 
-	return path.Join(GlobalConfig.RunningDir, i.Protocol())
+func GetProtocolRootPath(i Protocolize) string {
+	return path.Join(GlobalConfig.RunningDir, "universal_p2p_data", i.Protocol())
+}
+
+func GetMetaRootPath(i Protocolize) string {
+	return path.Join(GetProtocolRootPath(i), "meta")
 }
