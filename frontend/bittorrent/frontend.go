@@ -19,7 +19,7 @@ type Frontend struct {
 }
 
 var bittorrentFrontend Frontend = Frontend{
-	backend: &bittorrent.BittorrentBackend,
+	backend: bittorrent.BittorrentBackend,
 }
 
 func (this *Frontend) Protocol() string {
@@ -30,18 +30,24 @@ func (this *Frontend) SubVersion() string {
 	return "v0"
 }
 
-func getLargest(t *torrent.Torrent) *torrent.File {
+func getLargest(rootRes *bittorrent.Resource) *torrent.File {
 
-	var target *torrent.File
+	log.Debugf("getting larget file from %s", *rootRes.OriginalName)
+
+	var target torrent.File
 	var maxSize int64
-	for _, file := range t.Files() {
+	for _, file := range rootRes.Torrent.Files() {
+		log.Tracef("testing %s size %d", file.DisplayPath(), file.Length())
 		if maxSize < file.Length() {
+			log.Tracef("choose largest file as %s", file.DisplayPath())
 			maxSize = file.Length()
-			target = &file
+			target = file
 		}
 	}
 
-	return target
+	log.Debugf("final choose %s as largest", target.DisplayPath())
+
+	return &target
 }
 
 func pathEqual(a, b []string) bool {
@@ -102,7 +108,7 @@ func (this *Frontend) Stream(w http.ResponseWriter,
 
 	if len(access.SubPath) == 1 {
 		//ask for largest file in torrent
-		f = getLargest(rootRes.Torrent)
+		f = getLargest(rootRes)
 	} else {
 		have := false
 
@@ -124,6 +130,9 @@ func (this *Frontend) Stream(w http.ResponseWriter,
 			return
 		}
 	}
+
+	log.Tracef("streaming %s", f.DisplayPath())
+
 	f.Download()
 
 	reader, err := NewFileReader(f)

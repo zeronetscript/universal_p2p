@@ -2,8 +2,11 @@ package frontend
 
 import (
 	"github.com/juju/loggo"
+	"github.com/tylerb/graceful"
+	"github.com/zeronetscript/universal_p2p/backend"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 var httpLog = loggo.GetLogger("httpserver")
@@ -17,15 +20,28 @@ const (
 
 func StartHttpServer() {
 
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", Dispatch)
+
 	host := "127.0.0.1"
 	port := 7788
 
-	httpLog.Infof("start listening: 7788")
+	listenAddr := host + ":" + strconv.Itoa(port)
 
-	http.HandleFunc("/", Dispatch)
+	srv := &graceful.Server{
+		Timeout: 10 * time.Second,
 
-	err := http.ListenAndServe(host+":"+strconv.Itoa(port), nil)
-	if err != nil {
-		httpLog.Errorf("error listening http server %s", err)
+		Server: &http.Server{
+			Addr:    listenAddr,
+			Handler: mux,
+		},
 	}
+
+	err := srv.ListenAndServe()
+
+	if err != nil {
+		httpLog.Errorf("error listening http server %s", listenAddr)
+	}
+
+	backend.ShutdownAll()
 }

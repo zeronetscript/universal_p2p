@@ -2,6 +2,7 @@ package backend
 
 import (
 	"github.com/juju/loggo"
+	_ "github.com/zeronetscript/universal_p2p/log"
 	"io"
 	"path"
 )
@@ -18,6 +19,7 @@ type P2PBackend interface {
 	IterateSubResources(P2PResource, ResourceIterFunc) error
 	Command(io.Writer, *CommonRequest)
 	Recycle(*P2PResource)
+	Shutdown()
 }
 
 var AllBackend map[string]P2PBackend = make(map[string]P2PBackend)
@@ -53,4 +55,14 @@ func GetProtocolRootPath(i Protocolize) string {
 
 func GetMetaRootPath(i Protocolize) string {
 	return path.Join(GetProtocolRootPath(i), "meta")
+}
+
+var AllBackendDone = make(chan bool, 1)
+
+func ShutdownAll() {
+	for k, v := range AllBackend {
+		log.Infof("shutdown backend for %s", k)
+		v.Shutdown()
+	}
+	log.Infof("all backend shutdown")
 }

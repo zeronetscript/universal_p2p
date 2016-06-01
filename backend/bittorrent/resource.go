@@ -9,24 +9,26 @@ type Resource struct {
 	lastAccess time.Time
 	//for root
 	Torrent      *torrent.Torrent
+	OriginalName *string
 	SubFile      *torrent.File
 	subResources []*Resource
 }
 
-func CreateFromTorrent(t *torrent.Torrent) *Resource {
+func CreateFromTorrent(t *torrent.Torrent, originalName string) *Resource {
 
-	log.Debugf("create resource wrapper for torrent %s", t.Info().Hash())
+	log.Debugf("create resource wrapper for torrent %s", t.Name())
 
 	root := &Resource{
-		lastAccess: time.Now(),
-		Torrent:    t,
+		lastAccess:   time.Now(),
+		Torrent:      t,
+		OriginalName: &originalName,
 	}
 
 	root.subResources = make([]*Resource, len(t.Files()))
 
 	for i, f := range t.Files() {
 
-		log.Debugf("create sub resource for torrent %s,%s", t, f)
+		log.Debugf("create sub resource for torrent %s,%s", t, f.DisplayPath())
 		root.subResources[i] = &Resource{
 			//makes it old
 			lastAccess: time.Unix(0, 0),

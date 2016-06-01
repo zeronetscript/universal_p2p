@@ -173,5 +173,26 @@ var DefaultTrackers = [][]string{
 		"udp://tracker.tricitytorrents.com:2710/announce",
 		"udp://tracker.yoshi210.com:6969/announce",
 		"udp://www.wareztorrent.com:80/announce",
+	}, {
+
+		"http://tracker.trackerfix.com/announce",
+		"udp://9.rarbg.me:2710",
+		"udp://9.rarbg.to:2710",
+	},
+	{
+		"udp://mgtracker.org:2710/announce",
+		"http://share.camoe.cn:8080/announce",
+		"udp://11.rarbg.me:80/announce",
+		"http://tracker.tfile.me/announce",
+		"http://open.acgtracker.com:1096/announce",
+		"http://mgtracker.org:2710/announce",
+		"udp://tracker.openbittorrent.com:80",
+		"udp://tracker.openbittorrent.com:80/announce",
+		"udp://torrent.gresille.org:80/announce",
+		"udp://glotorrents.pw:6969/announce",
+		"udp://208.67.16.113:8000/announce",
+		"udp://9.rarbg.com:2710/announce",
+		"udp://9.rarbg.me:2710/announce",
+		"udp://tracker.ex.ua:80/announce",
 	},
 }

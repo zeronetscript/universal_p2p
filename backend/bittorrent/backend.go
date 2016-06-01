@@ -4,9 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"github.com/anacrolix/torrent"
+	"github.com/anacrolix/torrent/dht/krpc"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/juju/loggo"
 	"github.com/zeronetscript/universal_p2p/backend"
+	_ "github.com/zeronetscript/universal_p2p/log"
 	"io"
 	"io/ioutil"
 	"os"
@@ -34,53 +36,92 @@ func (this Backend) Protocol() string {
 	return PROTOCOL
 }
 
-var BittorrentBackend Backend = Backend{
-	resources: make(map[string]*Resource),
+var BittorrentBackend *Backend = NewBittorrentBackend()
+
+type dummy struct {
+}
+
+func (dummy) Protocol() string {
+	return PROTOCOL
+}
+
+func NewBittorrentBackend() *Backend {
+
+	cfg := &torrent.Config{
+		DataDir: backend.GetDownloadRootPath(dummy{}),
+		Debug:   false,
+	}
+
+	client, err := torrent.NewClient(cfg)
+
+	if err != nil {
+		log.Errorf("error creating bittorrent backend %s", err)
+		return nil
+	}
+
+	ret := &Backend{
+		resources: make(map[string]*Resource),
+		client:    client,
+		rwLock:    new(sync.RWMutex),
+	}
+
+	ret.loadSaved()
+
+	return ret
+
 }
 
 var log = loggo.GetLogger("bittorrent")
 
 func init() {
-
-	cfg := &torrent.Config{
-		DataDir: backend.GetDownloadRootPath(&BittorrentBackend),
-		//		Debug:   true,
+	if BittorrentBackend != nil {
+		backend.RegisterBackend(BittorrentBackend)
+	} else {
+		log.Errorf("ignore bittorrent backend")
 	}
-
-	var err error
-	BittorrentBackend.client, err = torrent.NewClient(cfg)
-	if err != nil {
-		log.Errorf("error creating bittorrent backend %s", err)
-		return
-	}
-
-	BittorrentBackend.rwLock = new(sync.RWMutex)
-	backend.RegisterBackend(&BittorrentBackend)
 }
 
-func (this *Backend) preprocessTorrent(t *torrent.Torrent) {
+func (this *Backend) saveAndRename(t *torrent.Torrent) *torrent.Torrent {
 
-	torrentPath := path.Join(this.getSingleMetaPath(t.InfoHash().HexString()),
-		"torrent.torrent")
+	metaDir := this.getSingleMetaPath(t.InfoHash().HexString())
 
-	//save before rename
-	f, err := os.Create(torrentPath)
+	er := os.MkdirAll(metaDir, os.ModeDir|os.ModePerm)
 
-	if err != nil {
-		log.Errorf("create file %s failed: %s", torrentPath, err)
-		//ignore torrent not save problem
-		return
+	log.Debugf("creating torrent dir %s", metaDir)
+
+	if er == nil {
+
+		torrentPath := path.Join(metaDir, "torrent.torrent")
+
+		log.Debugf("creating torrent %s", torrentPath)
+		//save before rename
+		f, err := os.Create(torrentPath)
+
+		if err != nil {
+			log.Errorf("create file %s failed: %s", torrentPath, err)
+			//ignore torrent not save problem
+			return t
+		}
+
+		log.Debugf("create file %s ", torrentPath)
+
+		err = t.Metainfo().Write(f)
+		if err != nil {
+			log.Errorf("error saving %s, %s", torrentPath, err)
+			//ignore not saving problem. we can still work
+		}
+	} else {
+		log.Errorf("error creating torrent path %s", metaDir)
 	}
 
-	log.Debugf("create file %s ", torrentPath)
+	return this.renameAddTorrent(t)
 
-	err = t.Metainfo().Write(f)
-	if err != nil {
-		log.Errorf("error saving %s, %s", torrentPath, err)
-		//ignore not saving problem. we can still work
-	}
+}
 
+func (this *Backend) renameAddTorrent(t *torrent.Torrent) *torrent.Torrent {
 	renameTorrent(t)
+	newT, _ := this.client.AddTorrent(t.Metainfo())
+	return newT
 }
 
 //rename torrent name to info hash, info must be got first
@@ -89,6 +130,7 @@ func renameTorrent(t *torrent.Torrent) {
 	log.Tracef("renaming name from %s to %s", t.Info().Name, t.InfoHash().HexString())
 	//naming it folder as info hash to avoid clash
 	t.Info().Name = t.InfoHash().HexString()
+
 }
 
 func (this *Backend) AddTorrentHashOrSpec(hashOrSpec interface{}) (*Resource, error) {
@@ -141,48 +183,33 @@ func (this *Backend) AddTorrentHashOrSpec(hashOrSpec interface{}) (*Resource, er
 			}
 		}
 
-		if !new {
-			log.Debugf("other goroutine is also adding %s", hashHexString)
+		if !new && t.Info() != nil {
+			log.Debugf("other goroutine is also adding %s, we not save torrent,only return resource from it", hashHexString)
 
-			//TODO needs test ?
-			if t.Info() == nil {
-				panic("logic error")
-			}
+			originalName := t.Name()
+			t = this.saveAndRename(t)
 
-			this.preprocessTorrent(t)
-
-			ret := CreateFromTorrent(t)
-			this.resources[hashHexString] = ret
-			return ret, nil
-		} else {
-			log.Tracef("this is new added torrent,%s", t)
-		}
-
-		info := t.Info()
-		if info != nil {
-			this.preprocessTorrent(t)
-			//already got
-			log.Debugf("info already got for %s", hashHexString)
-			ret := CreateFromTorrent(t)
-			this.resources[hashHexString] = ret
+			ret := CreateFromTorrent(t, originalName)
 			return ret, nil
 		}
-		//we add this first, wait get info complete
+
+		log.Tracef("this is new added torrent or waiting,%s", t)
 	}
 
 	log.Tracef("call GotInfo")
 	<-t.GotInfo()
 	log.Tracef("GotInfo completed")
-	this.preprocessTorrent(t)
-	log.Debugf("torrent downloaded...")
 
 	log.Tracef("wLock")
 	this.rwLock.Lock()
-	func() {
+	originalName := t.Name()
+	t = this.saveAndRename(t)
+	log.Debugf("torrent downloaded...")
+	defer func() {
 		log.Tracef("wunLock")
 		this.rwLock.Unlock()
 	}()
-	ret := CreateFromTorrent(t)
+	ret := CreateFromTorrent(t, originalName)
 	this.resources[hashHexString] = ret
 
 	return ret, nil
@@ -242,14 +269,15 @@ func (this *Backend) loadSingleTorrent(dirPath string) {
 
 	t, err := this.client.AddTorrentFromFile(torrentFile)
 	if err != nil {
-		log.Errorf("add torrent %s failed ,deleting :%s", dirPath)
+		log.Errorf("add torrent %s failed ,deleting :%s", torrentFile, dirPath)
 		//deleting whole dir
 		os.RemoveAll(dirPath)
 		return
 	}
 
+	originalName := t.Name()
 	renameTorrent(t)
-	this.resources[t.InfoHash().HexString()] = CreateFromTorrent(t)
+	this.resources[t.InfoHash().HexString()] = CreateFromTorrent(t, originalName)
 
 }
 
@@ -268,7 +296,7 @@ func (s ByLastAccessTime) Less(i, j int) bool {
 }
 
 func (this *Backend) getSingleMetaPath(infoHash string) string {
-	return path.Join(backend.GetMetaRootPath(this), infoHash)
+	return path.Join(this.getTorrentsPath(), infoHash)
 }
 
 func (this *Backend) getSingleDownloadPath(infoHash string) string {
@@ -318,14 +346,37 @@ func (this *Backend) recycle() {
 
 }
 
-// load from previously save torrents
-func (this *Backend) loadSaved() {
-	metaPath := backend.GetMetaRootPath(this)
+func (this *Backend) getTorrentsPath() string {
+	return path.Join(backend.GetMetaRootPath(this), "torrents")
+}
 
-	fileInfos, err := ioutil.ReadDir(metaPath)
+func (this *Backend) getInfosPath() string {
+	return path.Join(backend.GetMetaRootPath(this), "infos")
+}
+
+func (this *Backend) getDHTNodesPath() string {
+	return path.Join(this.getInfosPath(), "dht.nodes")
+}
+
+// load from previously save torrents, dht nodes
+func (this *Backend) loadSaved() {
+
+	log.Debugf("loading dht nodes:%s", this.getDHTNodesPath())
+	nodes, er := loadDHTNodes(this.getDHTNodesPath())
+	if er != nil {
+		log.Errorf("error loading dht nodes:%s, ignore saved dht nodes", er)
+	} else {
+		for _, n := range nodes {
+			this.client.DHT().AddNode(n)
+		}
+	}
+
+	torrentsPath := this.getTorrentsPath()
+	log.Infof("loading saved torrents from %s", torrentsPath)
+	fileInfos, err := ioutil.ReadDir(torrentsPath)
 
 	if err != nil {
-		log.Errorf("read dir %s failed, not loading old torrent", metaPath)
+		log.Errorf("read dir %s failed, not loading old torrent", torrentsPath)
 		return
 	}
 
@@ -333,7 +384,7 @@ func (this *Backend) loadSaved() {
 
 	for _, d := range fileInfos {
 
-		fullPath := path.Join(metaPath, d.Name())
+		fullPath := path.Join(torrentsPath, d.Name())
 		log.Tracef("testing %s", fullPath)
 		err := hash.FromHexString(d.Name())
 
@@ -349,4 +400,57 @@ func (this *Backend) loadSaved() {
 
 	this.recycle()
 
+}
+
+func saveDHTNodes(filePath string, nodes krpc.CompactIPv4NodeInfo) error {
+
+	nodesFile, err := os.Create(filePath)
+	if err != nil {
+		return err
+	}
+
+	binary, er := nodes.MarshalBencode()
+	if er != nil {
+		return er
+	}
+
+	_, errr := nodesFile.Write(binary)
+	if errr != nil {
+		return errr
+	}
+
+	return nil
+}
+
+func loadDHTNodes(filePath string) (krpc.CompactIPv4NodeInfo, error) {
+
+	f, er := os.Open(filePath)
+	var ret krpc.CompactIPv4NodeInfo
+
+	if er != nil {
+		return nil, er
+	}
+
+	bytes, err := ioutil.ReadAll(f)
+
+	if err != nil {
+
+		return nil, err
+	}
+
+	errr := ret.UnmarshalBencode(bytes)
+	if errr != nil {
+		return nil, errr
+	}
+
+	return ret, nil
+}
+
+func (this *Backend) Shutdown() {
+	os.MkdirAll(this.getInfosPath(), os.ModePerm)
+	log.Errorf("saving dht nodes:%s", this.getDHTNodesPath())
+	err := saveDHTNodes(this.getDHTNodesPath(), this.client.DHT().Nodes())
+	if err != nil {
+		log.Errorf("error saving dht nodes:%s", err)
+	}
 }
