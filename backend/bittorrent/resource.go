@@ -26,13 +26,13 @@ func CreateFromTorrent(t *torrent.Torrent, originalName string) *Resource {
 
 	root.subResources = make([]*Resource, len(t.Files()))
 
-	for i, f := range t.Files() {
+	for i := range t.Files() {
 
-		log.Debugf("create sub resource for torrent %s,%s", t, f.DisplayPath())
+		log.Debugf("create sub resource for torrent %s,%s", t, t.Files()[i].DisplayPath())
 		root.subResources[i] = &Resource{
 			//makes it old
 			lastAccess: time.Unix(0, 0),
-			SubFile:    &f,
+			SubFile:    &t.Files()[i],
 		}
 	}
 

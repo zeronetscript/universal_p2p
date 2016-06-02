@@ -115,7 +115,7 @@ func (this *Frontend) Stream(w http.ResponseWriter,
 		//TODO support archive unpack
 		this.backend.IterateSubResources(rootRes, func(res backend.P2PResource) bool {
 			cast := res.(*bittorrent.Resource)
-			if pathEqual(access.SubPath, cast.SubFile.FileInfo().Path) {
+			if pathEqual(access.SubPath[1:], cast.SubFile.FileInfo().Path) {
 				have = true
 				f = cast.SubFile
 				return true
