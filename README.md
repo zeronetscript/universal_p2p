@@ -41,11 +41,12 @@ http exposed website            runs locally               file share backend
 for example, when our agent is running on 127.0.0.1:7788 , you can embedded
 a video which stream video from following url:
 
-http://127.0.0.1:7788/bittorrent/stream/c12fe1c06bba254a9dc9f519b335aa7c1367a88a/video.mp4
+http://127.0.0.1:7788/bittorrent/v0/stream/c12fe1c06bba254a9dc9f519b335aa7c1367a88a/video.mp4
+
 
 or simply without specified filename ,just stream the biggest file(most case for video torrent):
 
-http://127.0.0.1:7788/bittorrent/stream/c12fe1c06bba254a9dc9f519b335aa7c1367a88a
+http://127.0.0.1:7788/bittorrent/v0/stream/c12fe1c06bba254a9dc9f519b335aa7c1367a88a
 (this ideal comes from go-peerflix)
 
 or even embedd a image from archiver as:
@@ -71,7 +72,7 @@ to archive this goal , our universal http front should fulfill following restric
 4. besides top p2p protocol prefix, every protocol should also have a sub prefix.
   to support protocol upgrade easily (ie, bittorrent can use torrent file or 
   magnet link,btsync has 1.4/2.0 protocol)
-5. can access sub-resource. ie, access specified file in torrent . or access a
+5. can access sub-resource. ie, access individue file in torrent . or access a
   file from archives (many resource packed as zip/rar file)
 6. user manageable,should expose a web front to view basic disk usage.
 7. save disk usage, should have "access from" trace and auto recycle
