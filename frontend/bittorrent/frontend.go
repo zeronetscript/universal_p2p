@@ -146,6 +146,8 @@ func (this *Frontend) Stream(w http.ResponseWriter,
 	w.Header().Set("Content-Disposition", "attachment; filename=\""+rootRes.Torrent.Info().Name+"\"")
 	http.ServeContent(w, r, f.DisplayPath(), time.Now(), reader)
 
+	log.Tracef("client disconnected")
+
 }
 
 func (this *Frontend) HandleRequest(w http.ResponseWriter, r *http.Request, request interface{}) {
