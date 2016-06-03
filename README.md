@@ -51,14 +51,14 @@ http://127.0.0.1:7788/bittorrent/v0/stream/c12fe1c06bba254a9dc9f519b335aa7c1367a
 
 or even embedd a image from archiver as:
 
-http://127.0.0.1:7788/bittorrent/stream/c12fe1c06bba254a9dc9f519b335aa7c1367a88a/a.zip/1.jpg
+http://127.0.0.1:7788/bittorrent/v0/stream/c12fe1c06bba254a9dc9f519b335aa7c1367a88a/a.zip/1.jpg
 
-these file will be download,unpacked by our agent, and stream as these urls.
+these file will be download,unpacked by our agent, and stream as these urls(not implemented currently).
 
 
-with different backend ,we can also access any p2p protocol file ,for example ipfs backend:
+with different backend ,we can also access any p2p protocol file ,for example ipfs backend(not implemented currently):
 
-http://127.0.0.1:7788/ipfs/QmarHSr9aSNaPSR6G9KFPbuLV9aEqJfTk1y9B8pdwqK4Rq/myfile.mp3
+http://127.0.0.1:7788/ipfs/v0/stream/QmarHSr9aSNaPSR6G9KFPbuLV9aEqJfTk1y9B8pdwqK4Rq/myfile.mp3
 
 
 
@@ -86,7 +86,7 @@ not goals:(at least at beginning)
 considerations:
 
 
-why not use magnet?
+why not use magnet link?
 magnet provides a universal URI for different p2p protocol already, but not 
 all p2p use it, so I'd prefer a simple way.
 
@@ -104,7 +104,5 @@ resource the site belongs to.this problem left as open.
 
 
 
-
-my first try will based on go-peerflix, it already provides http stream ability.
-only needs http access dispatcher
+currently bittorrent streaming function is implemented, most logic comes from go-peerflix
 

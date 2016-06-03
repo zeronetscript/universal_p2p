@@ -1,0 +1,7 @@
+* resource in archive auto unpack
+* support ipfs (it already has a http front, so adapt should be easy)
+* support syncthing (it's written in Go and opensource)
+* support tribler (written in python, needs libtorrent, hard to adapt.
+                  maybe include binary and did a http proxy is easier)
+* support btsync (close source, API needs payment. but we can use http UI
+                  to emulate)
