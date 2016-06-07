@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/juju/loggo"
 	"github.com/zeronetscript/universal_p2p/backend"
+	"io"
 	"net/http"
 	"strings"
 )
@@ -37,11 +38,15 @@ func parseHttpRequest(URL string) (commonRequest backend.CommonRequest, pathArra
 	return
 }
 
+func HttpAndLogError(str string, l *loggo.Logger, w http.ResponseWriter) {
+	l.Errorf(str)
+	http.Error(w, str, 404)
+}
+
 func Dispatch(w http.ResponseWriter, request *http.Request) {
 
 	if request.Method != "GET" && request.Method != "POST" {
-		dispatchLog.Warningf("unsupported method %s", request.Method)
-		http.Error(w, "unsupported method except POST or GET", 404)
+		HttpAndLogError(fmt.Sprintf("unsupported method %s", request.Method), &dispatchLog, w)
 		return
 	}
 
@@ -56,12 +61,13 @@ func Dispatch(w http.ResponseWriter, request *http.Request) {
 	frontend, exist := AllFrontEnd[commonRequest.RootProtocol]
 
 	if !exist {
-		dispatchLog.Warningf("protocol %s not supported", commonRequest.RootProtocol)
-		http.Error(w, fmt.Sprintf("not support protocol", commonRequest.RootProtocol), 404)
+		HttpAndLogError(fmt.Sprintf("not support protocol", commonRequest.RootProtocol), &dispatchLog, w)
 		return
 	}
 
 	var parsedRequest interface{}
+
+	var rd io.ReadCloser
 
 	if request.Method == "GET" {
 		parsedRequest = &backend.AccessRequest{
@@ -69,13 +75,37 @@ func Dispatch(w http.ResponseWriter, request *http.Request) {
 			SubPath:       pathArray,
 		}
 	} else {
-		dispatchLog.Criticalf("POST data upload read not implemented")
-		panic("not implemented")
+
+		const MAX_POST_DATA = 2 * 1024 * 1024
+		er := request.ParseMultipartForm(MAX_POST_DATA)
+		if er != nil {
+			HttpAndLogError(fmt.Sprintf("error parsing form %s", er), &dispatchLog, w)
+			return
+		}
+
+		const UPLOAD_KEY = "UPLOAD"
+
+		fh := request.MultipartForm.File[UPLOAD_KEY]
+
+		f, err := fh[0].Open()
+
+		if err != nil {
+			HttpAndLogError(fmt.Sprintf("error open multi part:%s", err), &dispatchLog, w)
+			return
+		}
+
+		rd = f
+
 		parsedRequest = &backend.UploadDataRequest{
 			CommonRequest: commonRequest,
+			UploadReader:  f,
 		}
 	}
 	//predefined command
+
+	if rd != nil {
+		defer rd.Close()
+	}
 
 	_, exist = backend.AllBackend[commonRequest.RootProtocol]
 

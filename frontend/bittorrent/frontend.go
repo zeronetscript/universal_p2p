@@ -1,6 +1,7 @@
 package bittorrent
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/anacrolix/torrent"
@@ -67,33 +68,13 @@ func pathEqual(a, b []string) bool {
 func (this *Frontend) Stream(w http.ResponseWriter,
 	r *http.Request, access *backend.AccessRequest) {
 
-	var hashOrSpec interface{}
-	if len(access.SubPath[0]) == 40 {
-		log.Debugf("try to parse %s as info hash", access.SubPath[0])
-		var hash metainfo.Hash
-		var err error
-		err = hash.FromHexString(access.SubPath[0])
-		if err != nil {
-			errStr := fmt.Sprintf("%s is not a info hash", access.SubPath[0])
-			log.Errorf(errStr)
-			http.Error(w, errStr, 404)
-			return
-		}
-		log.Debugf("seems %s is a magnet infohash", access.SubPath[0])
-		hashOrSpec = &hash
-	}
+	hashOrSpec, er := bittorrent.ParseHashOrSpec(access.SubPath[1])
 
-	if hashOrSpec == nil {
-		//not 20 hex string, can be a encodeURIComponent magnet link
-		log.Debugf("trying to parse %s as encodeURIComponent magnet link", access.SubPath[0])
-
-		var err error
-		hashOrSpec, err = torrent.TorrentSpecFromMagnetURI(access.SubPath[0])
-		if err != nil {
-			errStr := fmt.Sprintf("%s is not a encodeURIComponent encoded magnet link", access.SubPath[0])
-			http.Error(w, errStr, 404)
-			return
-		}
+	if er != nil {
+		errStr := fmt.Sprintf("%s is not a info hash or magnet link,%s", access.SubPath[1], er)
+		log.Errorf(errStr)
+		http.Error(w, errStr, 404)
+		return
 	}
 
 	rootRes, err := this.backend.AddTorrentHashOrSpec(hashOrSpec)
@@ -155,23 +136,45 @@ func (this *Frontend) Stream(w http.ResponseWriter,
 
 }
 
-func infoRootRes(res *bittorrent.Resource) (ret map[string]interface{}) {
+func infoRootRes(res *bittorrent.Resource, full bool) (ret map[string]interface{}) {
 
 	ret = make(map[string]interface{})
 	ret["hash"] = res.Torrent.InfoHash().HexString()
 	ret["name"] = *res.OriginalName
 	ret["bytes_completed"] = res.Torrent.BytesCompleted()
 	ret["length"] = res.Torrent.Length()
+
+	if !full {
+		return
+	}
+
+	file_list := make([]string, res.len(SubResources))
+
+	i := 0
+	for k := range res.SubResources {
+		file_list[i] = k
+		i++
+	}
+
+	ret["file_list"] = file_list
+
 	return
 }
 
-func (this *Frontend) Info(w http.ResponseWriter) {
+func (this *Frontend) statusSingle() {
+}
+
+func (this *Frontend) Status(w http.ResponseWriter, access *backend.AccessRequest) {
+	w.Header().Set("Content-Type", "application/json")
 	var jsonMap map[string]interface{} = make(map[string]interface{})
 
 	jsonMap["dht"] = this.backend.Client.DHT().Stats()
 
 	this.backend.RwLock.RLock()
 	defer this.backend.RwLock.RUnlock()
+
+	if check1Arg(access) {
+	}
 
 	infoArray := make([]interface{}, len(this.backend.Resources))
 	i := 0
@@ -184,26 +187,90 @@ func (this *Frontend) Info(w http.ResponseWriter) {
 
 	enc := json.NewEncoder(w)
 
-	w.Header().Set("Content-Type", "application/json")
 	enc.Encode(jsonMap)
+}
+
+func check1Arg(w http.ResponseWriter, a *backend.AccessRequest) bool {
+
+	if len(a.SubPath) < 1 {
+		log.Errorf("access url didn't have enough parameters")
+		http.Error(w, "access url didin't have enough parameters", 404)
+		return false
+	}
+
+	return true
+}
+
+func (this *Frontend) addTorrent(w http.ResponseWriter, u *backend.UploadDataRequest) {
+
+	metaInfo, err := metainfo.Load(u.UploadReader)
+	if err != nil {
+		HttpAndLogError(log, w, fmt.Sprintf("this is not a torrent file :%s", err))
+		return
+	}
+
+	this.backend.AddTorrent()
+	this.Status(w)
+}
+
+func (this *Frontend) getTorrent(w http.ResponseWriter, req *http.Request, a *backend.AccessRequest) {
+
+	hashOrSpec, er := bittorrent.ParseHashOrSpec(a.SubPath[1])
+
+	if er != nil {
+		errStr := fmt.Sprintf("%s is not  a hash info or magnet link:%s", a.SubPath[1], er)
+		log.Errorf(errStr)
+		http.Error(w, errStr, 404)
+		return
+	}
+
+	res, err := this.backend.AddTorrentHashOrSpec(hashOrSpec)
+
+	if err != nil {
+
+		errStr := fmt.Sprintf("error adding torrent :%s", err)
+		log.Errorf(errStr)
+		http.Error(w, errStr, 404)
+		return
+	}
+
+	bin, err := res.Torrent.Info().MarshalBencode()
+	if err != nil {
+		errStr := fmt.Sprintf("error getting torrent content:%s", err)
+		log.Errorf(errStr)
+		http.Error(w, errStr, 404)
+		return
+	}
+
+	rd := bytes.NewReader(bin)
+
+	http.ServeContent(w, req, *res.OriginalName+".torrent", time.Now(), rd)
 }
 
 func (this *Frontend) HandleRequest(w http.ResponseWriter, r *http.Request, request interface{}) {
 
 	access := request.(*backend.AccessRequest)
 
-	if access.RootCommand == backend.STREAM {
-		if len(access.SubPath) < 1 {
-			log.Errorf("access url didn't have enough parameters")
-			http.Error(w, "access url didin't have enough parameters", 404)
+	switch access.RootCommand {
+	case backend.STREAM:
+		if !check1Arg(w, access) {
 			return
 		}
+
 		this.Stream(w, r, access)
 		return
-	} else if access.RootCommand == backend.STATUS {
-		this.Info(w)
+	case backend.STATUS:
+		this.Status(w, access)
 		return
-	} else {
+
+	case bittorrent.GET_TORRENT:
+
+		if !check1Arg(w, access) {
+			return
+		}
+		this.getTorrent(w, r, access)
+
+	default:
 		http.Error(w, "unsupport", http.StatusInternalServerError)
 		return
 	}

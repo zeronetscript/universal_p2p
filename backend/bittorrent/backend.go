@@ -358,7 +358,7 @@ func (this *Backend) getDHTNodesPath() string {
 	return path.Join(this.getInfosPath(), "dht.nodes")
 }
 
-// load from previously save torrents, dht nodes
+// load from previously save torrents, dht nodes, access history
 func (this *Backend) loadSaved() {
 
 	log.Debugf("loading dht nodes:%s", this.getDHTNodesPath())
@@ -467,6 +467,21 @@ func loadDHTNodes(filePath string) (krpc.CompactIPv4NodeInfo, error) {
 
 func (this *Backend) getLastAccessPath() string {
 	return path.Join(this.getInfosPath(), "lastAccess.json")
+}
+
+func (this *Backend) AddTorrent(mi *metainfo.MetaInfo) error {
+	this.RwLock.Lock()
+	defer this.RwLock.Unlock()
+
+	t, err := this.Client.AddTorrent(mi)
+	if err != nil {
+		return err
+	}
+
+	this.renameAddTorrent(t)
+
+	return nil
+
 }
 
 func (this *Backend) Shutdown() {
