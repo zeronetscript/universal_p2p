@@ -165,7 +165,7 @@ func (this *Frontend) statusSingle() {
 }
 
 func (this *Frontend) Status(w http.ResponseWriter, subPath []string) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	var jsonMap map[string]interface{} = make(map[string]interface{})
 
 	this.backend.RwLock.RLock()
