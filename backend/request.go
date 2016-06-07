@@ -5,10 +5,11 @@ import (
 )
 
 const (
+	//ROOT protocol level command ,every backend should support
 	STREAM  = "stream"
 	STOP    = "stop"
 	RECYCLE = "recycle"
-	INFO    = "info"
+	STATUS  = "status"
 )
 
 type CommonRequest struct {

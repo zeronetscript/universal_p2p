@@ -1,6 +1,7 @@
 package bittorrent
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
@@ -9,6 +10,7 @@ import (
 	"github.com/zeronetscript/universal_p2p/backend/bittorrent"
 	"github.com/zeronetscript/universal_p2p/frontend"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -18,9 +20,7 @@ type Frontend struct {
 	backend *bittorrent.Backend
 }
 
-var bittorrentFrontend Frontend = Frontend{
-	backend: bittorrent.BittorrentBackend,
-}
+var BittorrentFrontend *Frontend
 
 func (this *Frontend) Protocol() string {
 	return bittorrent.PROTOCOL
@@ -104,33 +104,38 @@ func (this *Frontend) Stream(w http.ResponseWriter,
 		return
 	}
 
-	var f *torrent.File
+	var subRes *bittorrent.Resource
 
 	if len(access.SubPath) == 1 {
 		//ask for largest file in torrent
-		f = getLargest(rootRes)
-	} else {
-		have := false
-
-		//TODO support archive unpack
 		this.backend.IterateSubResources(rootRes, func(res backend.P2PResource) bool {
 			cast := res.(*bittorrent.Resource)
-			if pathEqual(access.SubPath[1:], cast.SubFile.FileInfo().Path) {
-				have = true
-				f = cast.SubFile
-				return true
-			} else {
+			if subRes == nil {
+				subRes = cast
 				return false
 			}
+
+			if cast.Size() > subRes.Size() {
+				subRes = cast
+			}
+
+			return false
 		})
-		if !have {
+	} else {
+		//TODO support archive unpack
+		subRes = (*rootRes.SubResources)[strings.Join(access.SubPath[1:], backend.SLASH)]
+
+		if subRes == nil {
 			errStr := fmt.Sprintf("no such file %s", access.SubPath)
 			log.Errorf(errStr)
 			http.Error(w, errStr, 404)
 			return
 		}
+
 	}
 
+	subRes.UpdateLastAccess()
+	f := subRes.SubFile
 	log.Tracef("streaming %s", f.DisplayPath())
 
 	f.Download()
@@ -150,25 +155,68 @@ func (this *Frontend) Stream(w http.ResponseWriter,
 
 }
 
+func infoRootRes(res *bittorrent.Resource) (ret map[string]interface{}) {
+
+	ret = make(map[string]interface{})
+	ret["hash"] = res.Torrent.InfoHash().HexString()
+	ret["name"] = *res.OriginalName
+	ret["bytes_completed"] = res.Torrent.BytesCompleted()
+	ret["length"] = res.Torrent.Length()
+	return
+}
+
+func (this *Frontend) Info(w http.ResponseWriter) {
+	var jsonMap map[string]interface{} = make(map[string]interface{})
+
+	jsonMap["dht"] = this.backend.Client.DHT().Stats()
+
+	this.backend.RwLock.RLock()
+	defer this.backend.RwLock.RUnlock()
+
+	infoArray := make([]interface{}, len(this.backend.Resources))
+	i := 0
+	for _, v := range this.backend.Resources {
+		infoArray[i] = infoRootRes(v)
+		i += 1
+	}
+
+	jsonMap["torrents"] = infoArray
+
+	enc := json.NewEncoder(w)
+
+	w.Header().Set("Content-Type", "application/json")
+	enc.Encode(jsonMap)
+}
+
 func (this *Frontend) HandleRequest(w http.ResponseWriter, r *http.Request, request interface{}) {
 
 	access := request.(*backend.AccessRequest)
 
-	if len(access.SubPath) < 1 {
-		log.Errorf("access url didn't have enough parameters")
-		http.Error(w, "access url didin't have enough parameters", 404)
-		return
-	}
-
 	if access.RootCommand == backend.STREAM {
+		if len(access.SubPath) < 1 {
+			log.Errorf("access url didn't have enough parameters")
+			http.Error(w, "access url didin't have enough parameters", 404)
+			return
+		}
 		this.Stream(w, r, access)
+		return
+	} else if access.RootCommand == backend.STATUS {
+		this.Info(w)
 		return
 	} else {
 		http.Error(w, "unsupport", http.StatusInternalServerError)
+		return
 	}
 
 }
 
-func init() {
-	frontend.RegisterFrontend(&bittorrentFrontend)
+func NewBittorrentFrontend(be *bittorrent.Backend) *Frontend {
+
+	ret := &Frontend{
+		backend: be,
+	}
+
+	frontend.RegisterFrontend(ret)
+
+	return ret
 }

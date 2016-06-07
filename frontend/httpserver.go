@@ -29,7 +29,7 @@ func StartHttpServer() {
 	listenAddr := host + ":" + strconv.Itoa(port)
 
 	srv := &graceful.Server{
-		Timeout: 10 * time.Second,
+		Timeout: 1 * time.Second,
 
 		Server: &http.Server{
 			Addr:    listenAddr,

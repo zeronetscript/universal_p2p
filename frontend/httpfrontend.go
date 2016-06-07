@@ -18,7 +18,8 @@ var AllFrontEnd map[string]HttpFrontend = make(map[string]HttpFrontend)
 
 func RegisterFrontend(frontend HttpFrontend) bool {
 
-	frontLog.Debugf("try to register frontend Protocol :%s,SubVersion: %s", frontend.Protocol(), frontend.SubVersion())
+	frontLog.Debugf("try to register frontend Protocol :%s,SubVersion: %s",
+		frontend.Protocol(), frontend.SubVersion())
 
 	_, exist := AllFrontEnd[frontend.Protocol()]
 

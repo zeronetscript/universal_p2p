@@ -9,6 +9,8 @@ import (
 
 var backendLog = loggo.GetLogger("backend")
 
+const SLASH = "/"
+
 type Protocolize interface {
 	Protocol() string
 }

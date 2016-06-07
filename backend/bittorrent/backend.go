@@ -18,6 +18,11 @@ import (
 	"time"
 )
 
+const (
+	ADD_TORRENT = "add_torrent"
+	GET_TORRENT = "get_torrent"
+)
+
 const PROTOCOL = "bittorrent"
 
 const torrentBlockListURL = "http://john.bitsurge.net/public/biglist.p2p.gz"
@@ -26,17 +31,17 @@ const torrentBlockListURL = "http://john.bitsurge.net/public/biglist.p2p.gz"
 const MAX_KEEP_FILE_SIZE int64 = 30 * 1024 * 1024 * 1024 * 1024
 
 type Backend struct {
-	client *torrent.Client
-	rwLock *sync.RWMutex
+	Client *torrent.Client
+	RwLock *sync.RWMutex
 
-	resources map[string]*Resource
+	Resources map[string]*Resource
 }
 
 func (this Backend) Protocol() string {
 	return PROTOCOL
 }
 
-var BittorrentBackend *Backend = NewBittorrentBackend()
+var BittorrentBackend *Backend
 
 type dummy struct {
 }
@@ -60,26 +65,20 @@ func NewBittorrentBackend() *Backend {
 	}
 
 	ret := &Backend{
-		resources: make(map[string]*Resource),
-		client:    client,
-		rwLock:    new(sync.RWMutex),
+		Resources: make(map[string]*Resource),
+		Client:    client,
+		RwLock:    new(sync.RWMutex),
 	}
 
 	ret.loadSaved()
+
+	backend.RegisterBackend(ret)
 
 	return ret
 
 }
 
 var log = loggo.GetLogger("bittorrent")
-
-func init() {
-	if BittorrentBackend != nil {
-		backend.RegisterBackend(BittorrentBackend)
-	} else {
-		log.Errorf("ignore bittorrent backend")
-	}
-}
 
 func (this *Backend) saveAndRename(t *torrent.Torrent) *torrent.Torrent {
 
@@ -120,7 +119,7 @@ func (this *Backend) saveAndRename(t *torrent.Torrent) *torrent.Torrent {
 
 func (this *Backend) renameAddTorrent(t *torrent.Torrent) *torrent.Torrent {
 	renameTorrent(t)
-	newT, _ := this.client.AddTorrent(t.Metainfo())
+	newT, _ := this.Client.AddTorrent(t.Metainfo())
 	return newT
 }
 
@@ -146,12 +145,12 @@ func (this *Backend) AddTorrentHashOrSpec(hashOrSpec interface{}) (*Resource, er
 
 	if isHash {
 		log.Tracef("wlock")
-		this.rwLock.Lock()
+		this.RwLock.Lock()
 		func() {
 			log.Tracef("wunlock")
-			defer this.rwLock.Unlock()
+			defer this.RwLock.Unlock()
 		}()
-		resource, exist := this.resources[hashHexString]
+		resource, exist := this.Resources[hashHexString]
 		if exist {
 			log.Debugf("%s already exist", hashHexString)
 			// we didin't change struct ,no need to lock write
@@ -165,19 +164,19 @@ func (this *Backend) AddTorrentHashOrSpec(hashOrSpec interface{}) (*Resource, er
 
 	{
 		log.Tracef("wlock")
-		this.rwLock.Lock()
+		this.RwLock.Lock()
 		func() {
 			log.Tracef("wunlock")
-			defer this.rwLock.Unlock()
+			defer this.RwLock.Unlock()
 		}()
 
 		var new bool
 		if isHash {
-			t, new = this.client.AddTorrentInfoHash(*hash)
+			t, new = this.Client.AddTorrentInfoHash(*hash)
 			t.AddTrackers(DefaultTrackers)
 		} else {
 			var err error
-			t, new, err = this.client.AddTorrentSpec(torrentSpec)
+			t, new, err = this.Client.AddTorrentSpec(torrentSpec)
 			if err != nil {
 				return nil, err
 			}
@@ -189,7 +188,7 @@ func (this *Backend) AddTorrentHashOrSpec(hashOrSpec interface{}) (*Resource, er
 			originalName := t.Name()
 			t = this.saveAndRename(t)
 
-			ret := CreateFromTorrent(t, originalName)
+			ret := CreateFromTorrent(t, originalName, this.Resources[hashHexString])
 			return ret, nil
 		}
 
@@ -201,16 +200,16 @@ func (this *Backend) AddTorrentHashOrSpec(hashOrSpec interface{}) (*Resource, er
 	log.Tracef("GotInfo completed")
 
 	log.Tracef("wLock")
-	this.rwLock.Lock()
+	this.RwLock.Lock()
 	originalName := t.Name()
 	t = this.saveAndRename(t)
 	log.Debugf("torrent downloaded...")
 	defer func() {
 		log.Tracef("wunLock")
-		this.rwLock.Unlock()
+		this.RwLock.Unlock()
 	}()
-	ret := CreateFromTorrent(t, originalName)
-	this.resources[hashHexString] = ret
+	ret := CreateFromTorrent(t, originalName, this.Resources[hashHexString])
+	this.Resources[hashHexString] = ret
 
 	return ret, nil
 }
@@ -220,20 +219,20 @@ func (this *Backend) Command(w io.Writer, r *backend.CommonRequest) {
 }
 
 func (this *Backend) IterateRootResources(iterFunc backend.ResourceIterFunc) {
-	this.rwLock.RLock()
-	defer this.rwLock.RUnlock()
-	for _, v := range this.resources {
+	this.RwLock.RLock()
+	defer this.RwLock.RUnlock()
+	for _, v := range this.Resources {
 		if iterFunc(v) {
-			v.lastAccess = time.Now()
+			v.UpdateLastAccess()
 		}
 	}
 }
 
 func (this *Backend) IterateSubResources(res backend.P2PResource, iterFunc backend.ResourceIterFunc) error {
-	this.rwLock.RLock()
-	defer this.rwLock.RUnlock()
+	this.RwLock.RLock()
+	defer this.RwLock.RUnlock()
 
-	v, exist := this.resources[res.RootURL()]
+	v, exist := this.Resources[res.RootURL()]
 
 	if res.Protocol() != this.Protocol() {
 		errStr := fmt.Sprintf("res protocol %s not same as my protocol", res.Protocol(), this.Protocol())
@@ -247,10 +246,9 @@ func (this *Backend) IterateSubResources(res backend.P2PResource, iterFunc backe
 		return errors.New(errStr)
 	}
 
-	for _, r := range v.subResources {
-
-		if iterFunc(r) {
-			r.lastAccess = time.Now()
+	for _, v := range *v.SubResources {
+		if iterFunc(v) {
+			v.UpdateLastAccess()
 		}
 	}
 	return nil
@@ -260,14 +258,15 @@ func (this *Backend) Recycle(r *backend.P2PResource) {
 	panic("not implemented")
 }
 
-func (this *Backend) loadSingleTorrent(dirPath string) {
+func (this *Backend) loadSingleTorrent(dirPath string, wg *sync.WaitGroup) {
+	defer wg.Done()
 	torrentFile := path.Join(dirPath, "torrent.torrent")
 
 	//will not clash ,since this is init action
-	this.rwLock.Lock()
-	defer this.rwLock.Unlock()
+	this.RwLock.Lock()
+	defer this.RwLock.Unlock()
 
-	t, err := this.client.AddTorrentFromFile(torrentFile)
+	t, err := this.Client.AddTorrentFromFile(torrentFile)
 	if err != nil {
 		log.Errorf("add torrent %s failed ,deleting :%s", torrentFile, dirPath)
 		//deleting whole dir
@@ -277,7 +276,8 @@ func (this *Backend) loadSingleTorrent(dirPath string) {
 
 	originalName := t.Name()
 	renameTorrent(t)
-	this.resources[t.InfoHash().HexString()] = CreateFromTorrent(t, originalName)
+	this.Resources[t.InfoHash().HexString()] =
+		CreateFromTorrent(t, originalName, this.Resources[t.InfoHash().HexString()])
 
 }
 
@@ -307,9 +307,9 @@ func (this *Backend) recycle() {
 	//now we are in init stage, no need to lock
 	//currently
 
-	s := make(ByLastAccessTime, len(this.resources))
+	s := make(ByLastAccessTime, len(this.Resources))
 	i := 0
-	for _, v := range this.resources {
+	for _, v := range this.Resources {
 		s[i] = v
 		i += 1
 	}
@@ -324,7 +324,7 @@ func (this *Backend) recycle() {
 
 		if keep {
 			totalSize += v.DiskUsage()
-			log.Debugf("sumrize %s size %d,total %d", v.Torrent.Name(), v.DiskUsage(), totalSize)
+			log.Debugf("sumrize %s size %d,total %d", *v.OriginalName, v.DiskUsage(), totalSize)
 			if totalSize > MAX_KEEP_FILE_SIZE {
 				//delete all after this
 				keep = false
@@ -340,7 +340,7 @@ func (this *Backend) recycle() {
 
 			os.RemoveAll(dataPath)
 		} else {
-			log.Debugf("keeping %s", v.Torrent.Name())
+			log.Debugf("keeping %s", *v.OriginalName)
 		}
 	}
 
@@ -367,8 +367,14 @@ func (this *Backend) loadSaved() {
 		log.Errorf("error loading dht nodes:%s, ignore saved dht nodes", er)
 	} else {
 		for _, n := range nodes {
-			this.client.DHT().AddNode(n)
+			this.Client.DHT().AddNode(n)
 		}
+	}
+
+	log.Debugf("loading last access history:%s", this.getLastAccessPath())
+	er = loadLastAccessFile(&this.Resources, this.getLastAccessPath())
+	if er != nil {
+		log.Errorf("ignore last access history,error :%s", er)
 	}
 
 	torrentsPath := this.getTorrentsPath()
@@ -382,6 +388,8 @@ func (this *Backend) loadSaved() {
 
 	var hash metainfo.Hash
 
+	var wg sync.WaitGroup
+
 	for _, d := range fileInfos {
 
 		fullPath := path.Join(torrentsPath, d.Name())
@@ -390,11 +398,22 @@ func (this *Backend) loadSaved() {
 
 		if err == nil {
 			log.Debugf("found info hash dir %s", d.Name())
-			go this.loadSingleTorrent(fullPath)
+			wg.Add(1)
+			go this.loadSingleTorrent(fullPath, &wg)
 		} else {
 			log.Errorf("%s is not a infohash ,will delete it", fullPath)
 			//TODO danger
 			//os.RemoveAll(fullPath)
+		}
+	}
+
+	wg.Wait()
+
+	//delete every access history which do not have corresponding torrent
+	for k, v := range this.Resources {
+		if v.Torrent == nil {
+			log.Tracef("history %s not have corresponding torrent ", *v.OriginalName)
+			delete(this.Resources, k)
 		}
 	}
 
@@ -446,11 +465,24 @@ func loadDHTNodes(filePath string) (krpc.CompactIPv4NodeInfo, error) {
 	return ret, nil
 }
 
+func (this *Backend) getLastAccessPath() string {
+	return path.Join(this.getInfosPath(), "lastAccess.json")
+}
+
 func (this *Backend) Shutdown() {
 	os.MkdirAll(this.getInfosPath(), os.ModePerm)
-	log.Errorf("saving dht nodes:%s", this.getDHTNodesPath())
-	err := saveDHTNodes(this.getDHTNodesPath(), this.client.DHT().Nodes())
+	log.Debugf("saving dht nodes:%s", this.getDHTNodesPath())
+	err := saveDHTNodes(this.getDHTNodesPath(), this.Client.DHT().Nodes())
 	if err != nil {
 		log.Errorf("error saving dht nodes:%s", err)
 	}
+
+	log.Debugf("saving access history file :%s", this.getLastAccessPath())
+
+	err = saveLastAccessFile(&this.Resources, this.getLastAccessPath())
+
+	if err != nil {
+		log.Errorf("error saving last access file %s", err)
+	}
+
 }

@@ -9,16 +9,14 @@ import (
 	"strings"
 )
 
-const slash = "/"
-
 var dispatchLog = loggo.GetLogger("Dispatch")
 
 func parseHttpRequest(URL string) (commonRequest backend.CommonRequest, pathArray []string, err error) {
 	dispatchLog.Tracef("accessing %s", URL)
 
-	trimmed := strings.TrimRight(strings.TrimLeft(URL, slash), slash)
+	trimmed := strings.TrimRight(strings.TrimLeft(URL, backend.SLASH), backend.SLASH)
 
-	allPathArray := strings.Split(trimmed, slash)
+	allPathArray := strings.Split(trimmed, backend.SLASH)
 
 	if len(allPathArray) < 3 {
 		errStr := fmt.Sprintf("url access path is '%s', less than needed (at least 3)", trimmed)

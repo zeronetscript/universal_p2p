@@ -1,7 +1,9 @@
 package bittorrent
 
 import (
+	"encoding/json"
 	"github.com/anacrolix/torrent"
+	"os"
 	"time"
 )
 
@@ -11,29 +13,111 @@ type Resource struct {
 	Torrent      *torrent.Torrent
 	OriginalName *string
 	SubFile      *torrent.File
-	subResources []*Resource
+	//key is path
+	SubResources *map[string]*Resource
+	rootRes      *Resource
+	path         *string
 }
 
-func CreateFromTorrent(t *torrent.Torrent, originalName string) *Resource {
+func (this *Resource) UnmarshalJSON(data []byte) error {
 
-	log.Debugf("create resource wrapper for torrent %s", t.Name())
+	type Aux struct {
+		SubResources *map[string]*Aux
+		OriginalName *string
+		Path         *string
+		LastAccess   time.Time
+	}
+
+	aux := &Aux{}
+
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+
+	this.OriginalName = aux.OriginalName
+	this.lastAccess = aux.LastAccess
+
+	if aux.SubResources != nil && len(*aux.SubResources) != 0 {
+		tmp := make(map[string]*Resource)
+		this.SubResources = &tmp
+		for k, v := range *aux.SubResources {
+			(*this.SubResources)[k] = &Resource{
+				path:       v.Path,
+				lastAccess: v.LastAccess,
+			}
+		}
+	}
+
+	return nil
+}
+
+func (this *Resource) MarshalJSON() ([]byte, error) {
+
+	if !this.IsRoot() {
+		//for none root
+		return json.Marshal(&struct {
+			Path       string
+			LastAccess time.Time
+		}{
+			Path: this.SubFile.DisplayPath(),
+		})
+	}
+
+	//for root
+	return json.Marshal(&struct {
+		SubResources *map[string]*Resource
+		OriginalName string
+		LastAccess   time.Time
+	}{
+		SubResources: this.SubResources,
+		OriginalName: *this.OriginalName,
+		LastAccess:   this.lastAccess,
+	})
+
+}
+
+func CreateFromTorrent(t *torrent.Torrent,
+	originalName string, historyRoot *Resource) *Resource {
+	//TODO loads lastAccess from serialized
+
+	log.Debugf("create resource wrapper for torrent %s", originalName)
 
 	root := &Resource{
-		lastAccess:   time.Now(),
 		Torrent:      t,
 		OriginalName: &originalName,
 	}
 
-	root.subResources = make([]*Resource, len(t.Files()))
+	if historyRoot != nil {
+		log.Tracef("found history %s", t.InfoHash().HexString())
+		root.lastAccess = historyRoot.lastAccess
+	} else {
+		root.lastAccess = time.Now()
+	}
 
-	for i := range t.Files() {
+	tmp := make(map[string]*Resource)
+	root.SubResources = &tmp
+
+	for i, v := range t.Files() {
 
 		log.Debugf("create sub resource for torrent %s,%s", t, t.Files()[i].DisplayPath())
-		root.subResources[i] = &Resource{
+
+		sub := &Resource{
 			//makes it old
-			lastAccess: time.Unix(0, 0),
-			SubFile:    &t.Files()[i],
+			SubFile: &t.Files()[i],
+			rootRes: root,
 		}
+		(*root.SubResources)[v.DisplayPath()] = sub
+
+		if historyRoot != nil {
+			subHistory := (*historyRoot.SubResources)[v.DisplayPath()]
+			if subHistory != nil {
+				log.Tracef("found sub history %s", v.DisplayPath())
+				sub.lastAccess = subHistory.lastAccess
+				continue
+			}
+		}
+
+		sub.lastAccess = time.Unix(0, 0)
 	}
 
 	return root
@@ -66,11 +150,18 @@ func (this *Resource) LastAccess() time.Time {
 }
 
 func (this *Resource) IsRoot() bool {
-	return this.Torrent != nil
+	//use OriginalName instead of Torrent
+	//because when load from lastAccess.json,
+	//we do not have Torrent variable, only OriginalName
+	return this.OriginalName != nil
 }
 
 func (this *Resource) RootURL() string {
-	return this.Torrent.Info().Hash().HexString()
+	if this.IsRoot() {
+		return this.Torrent.InfoHash().HexString()
+	}
+
+	return this.rootRes.Torrent.InfoHash().HexString()
 }
 
 var emptyPathArray []string
@@ -82,4 +173,45 @@ func (this *Resource) Path() []string {
 	}
 
 	return this.SubFile.FileInfo().Path
+}
+
+func (this *Resource) UpdateLastAccess() {
+	this.lastAccess = time.Now()
+	if this.rootRes != nil {
+		this.rootRes.UpdateLastAccess()
+	}
+}
+
+//even error happened ,you can still use result map(empty,not nil)
+func loadLastAccessFile(ret *map[string]*Resource, filePath string) error {
+	f, err := os.Open(filePath)
+	defer f.Close()
+	if err != nil {
+		//remove unaccessible file
+		_ = os.Remove(filePath)
+		return err
+	}
+
+	dec := json.NewDecoder(f)
+
+	err = dec.Decode(ret)
+
+	return err
+}
+
+func saveLastAccessFile(res *map[string]*Resource, path string) error {
+	f, err := os.Create(path)
+	defer f.Close()
+	if err != nil {
+		return err
+	}
+	f.Truncate(0)
+
+	enc := json.NewEncoder(f)
+
+	err = enc.Encode(res)
+	if err != nil {
+		_ = os.Remove(path)
+	}
+	return err
 }
