@@ -161,9 +161,6 @@ func infoRootRes(res *bittorrent.Resource, full bool) (ret map[string]interface{
 	return
 }
 
-func (this *Frontend) statusSingle() {
-}
-
 func (this *Frontend) Status(w http.ResponseWriter, subPath []string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	var jsonMap map[string]interface{} = make(map[string]interface{})
