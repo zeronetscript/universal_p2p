@@ -68,10 +68,10 @@ func pathEqual(a, b []string) bool {
 func (this *Frontend) Stream(w http.ResponseWriter,
 	r *http.Request, access *backend.AccessRequest) {
 
-	hashOrSpec, er := bittorrent.ParseHashOrSpec(access.SubPath[1])
+	hashOrSpec, er := bittorrent.ParseHashOrSpec(access.SubPath[0])
 
 	if er != nil {
-		errStr := fmt.Sprintf("%s is not a info hash or magnet link,%s", access.SubPath[1], er)
+		errStr := fmt.Sprintf("%s is not a info hash or magnet link,%s", access.SubPath[0], er)
 		log.Errorf(errStr)
 		http.Error(w, errStr, 404)
 		return
@@ -148,10 +148,10 @@ func infoRootRes(res *bittorrent.Resource, full bool) (ret map[string]interface{
 		return
 	}
 
-	file_list := make([]string, res.len(SubResources))
+	file_list := make([]string, len(*res.SubResources))
 
 	i := 0
-	for k := range res.SubResources {
+	for k, _ := range *res.SubResources {
 		file_list[i] = k
 		i++
 	}
@@ -164,37 +164,48 @@ func infoRootRes(res *bittorrent.Resource, full bool) (ret map[string]interface{
 func (this *Frontend) statusSingle() {
 }
 
-func (this *Frontend) Status(w http.ResponseWriter, access *backend.AccessRequest) {
+func (this *Frontend) Status(w http.ResponseWriter, subPath []string) {
 	w.Header().Set("Content-Type", "application/json")
 	var jsonMap map[string]interface{} = make(map[string]interface{})
-
-	jsonMap["dht"] = this.backend.Client.DHT().Stats()
 
 	this.backend.RwLock.RLock()
 	defer this.backend.RwLock.RUnlock()
 
-	if check1Arg(access) {
-	}
+	if check1Arg(false, w, subPath) {
+		//single torrent
+		hashOrSpec, err := bittorrent.ParseHashOrSpec(subPath[0])
+		if err != nil {
+			frontend.HttpAndLogError(fmt.Sprintf("first arg is not infoHash or magnet link:%s", err), &log, w)
+			return
+		}
 
-	infoArray := make([]interface{}, len(this.backend.Resources))
-	i := 0
-	for _, v := range this.backend.Resources {
-		infoArray[i] = infoRootRes(v)
-		i += 1
-	}
+		res := this.backend.Resources[bittorrent.HexString(hashOrSpec)]
+		jsonMap = infoRootRes(res, true)
+	} else {
+		//global status
+		jsonMap["dht"] = this.backend.Client.DHT().Stats()
+		infoArray := make([]interface{}, len(this.backend.Resources))
+		i := 0
+		for _, v := range this.backend.Resources {
+			infoArray[i] = infoRootRes(v, false)
+			i += 1
+		}
 
-	jsonMap["torrents"] = infoArray
+		jsonMap["torrents"] = infoArray
+	}
 
 	enc := json.NewEncoder(w)
 
 	enc.Encode(jsonMap)
 }
 
-func check1Arg(w http.ResponseWriter, a *backend.AccessRequest) bool {
+func check1Arg(writeResponse bool, w http.ResponseWriter, subPath []string) bool {
 
-	if len(a.SubPath) < 1 {
-		log.Errorf("access url didn't have enough parameters")
-		http.Error(w, "access url didin't have enough parameters", 404)
+	if len(subPath) < 1 {
+		if writeResponse {
+			log.Errorf("access url didn't have enough parameters")
+			http.Error(w, "access url didin't have enough parameters", 404)
+		}
 		return false
 	}
 
@@ -205,12 +216,16 @@ func (this *Frontend) addTorrent(w http.ResponseWriter, u *backend.UploadDataReq
 
 	metaInfo, err := metainfo.Load(u.UploadReader)
 	if err != nil {
-		HttpAndLogError(log, w, fmt.Sprintf("this is not a torrent file :%s", err))
+		frontend.HttpAndLogError(fmt.Sprintf("this is not a torrent file :%s", err), &log, w)
 		return
 	}
 
-	this.backend.AddTorrent()
-	this.Status(w)
+	err = this.backend.AddTorrent(metaInfo)
+	if err != nil {
+		frontend.HttpAndLogError(fmt.Sprintf("error adding torrent:%s", err), &log, w)
+		return
+	}
+	this.Status(w, []string{metaInfo.Info.Hash().HexString()})
 }
 
 func (this *Frontend) getTorrent(w http.ResponseWriter, req *http.Request, a *backend.AccessRequest) {
@@ -253,19 +268,19 @@ func (this *Frontend) HandleRequest(w http.ResponseWriter, r *http.Request, requ
 
 	switch access.RootCommand {
 	case backend.STREAM:
-		if !check1Arg(w, access) {
+		if !check1Arg(true, w, access.SubPath) {
 			return
 		}
 
 		this.Stream(w, r, access)
 		return
 	case backend.STATUS:
-		this.Status(w, access)
+		this.Status(w, access.SubPath)
 		return
 
 	case bittorrent.GET_TORRENT:
 
-		if !check1Arg(w, access) {
+		if !check1Arg(true, w, access.SubPath) {
 			return
 		}
 		this.getTorrent(w, r, access)

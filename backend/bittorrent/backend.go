@@ -134,7 +134,7 @@ func renameTorrent(t *torrent.Torrent) {
 
 func (this *Backend) AddTorrentHashOrSpec(hashOrSpec interface{}) (*Resource, error) {
 
-	hash, isHash := hashOrSpec.(*metainfo.Hash)
+	hash, isHash := hashOrSpec.(metainfo.Hash)
 	var hashHexString string
 	var torrentSpec *torrent.TorrentSpec
 	if isHash {
@@ -172,7 +172,7 @@ func (this *Backend) AddTorrentHashOrSpec(hashOrSpec interface{}) (*Resource, er
 
 		var new bool
 		if isHash {
-			t, new = this.Client.AddTorrentInfoHash(*hash)
+			t, new = this.Client.AddTorrentInfoHash(hash)
 			t.AddTrackers(DefaultTrackers)
 		} else {
 			var err error

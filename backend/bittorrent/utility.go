@@ -5,6 +5,23 @@ import (
 	"github.com/anacrolix/torrent/metainfo"
 )
 
+func HexString(hashOrSpec interface{}) string {
+
+	hash, ok := hashOrSpec.(metainfo.Hash)
+
+	if ok {
+		return hash.HexString()
+	}
+
+	spec, ook := hashOrSpec.(*torrent.TorrentSpec)
+
+	if ook {
+		return spec.InfoHash.HexString()
+	}
+
+	return ""
+}
+
 func ParseHashOrSpec(str string) (interface{}, error) {
 
 	if len(str) == 40 {
