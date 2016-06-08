@@ -51,20 +51,6 @@ func getLargest(rootRes *bittorrent.Resource) *torrent.File {
 	return &target
 }
 
-func pathEqual(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-
-	return true
-}
-
 func (this *Frontend) Stream(w http.ResponseWriter,
 	r *http.Request, access *backend.AccessRequest) {
 
@@ -222,6 +208,7 @@ func (this *Frontend) addTorrent(w http.ResponseWriter, u *backend.UploadDataReq
 		frontend.HttpAndLogError(fmt.Sprintf("error adding torrent:%s", err), &log, w)
 		return
 	}
+	log.Debugf("adding torrent complete")
 	this.Status(w, []string{metaInfo.Info.Hash().HexString()})
 }
 
@@ -261,31 +248,36 @@ func (this *Frontend) getTorrent(w http.ResponseWriter, req *http.Request, a *ba
 
 func (this *Frontend) HandleRequest(w http.ResponseWriter, r *http.Request, request interface{}) {
 
-	access := request.(*backend.AccessRequest)
+	access, isAccess := request.(*backend.AccessRequest)
 
-	switch access.RootCommand {
-	case backend.STREAM:
-		if !check1Arg(true, w, access.SubPath) {
+	if isAccess {
+		switch access.RootCommand {
+		case backend.STREAM:
+			if !check1Arg(true, w, access.SubPath) {
+				return
+			}
+
+			this.Stream(w, r, access)
+			return
+		case backend.STATUS:
+			this.Status(w, access.SubPath)
+			return
+
+		case bittorrent.GET_TORRENT:
+
+			if !check1Arg(true, w, access.SubPath) {
+				return
+			}
+			this.getTorrent(w, r, access)
+
+		default:
+			http.Error(w, "unsupport", http.StatusInternalServerError)
 			return
 		}
-
-		this.Stream(w, r, access)
-		return
-	case backend.STATUS:
-		this.Status(w, access.SubPath)
-		return
-
-	case bittorrent.GET_TORRENT:
-
-		if !check1Arg(true, w, access.SubPath) {
-			return
-		}
-		this.getTorrent(w, r, access)
-
-	default:
-		http.Error(w, "unsupport", http.StatusInternalServerError)
-		return
 	}
+
+	upload := request.(*backend.UploadDataRequest)
+	this.addTorrent(w, upload)
 
 }
 

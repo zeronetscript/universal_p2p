@@ -85,9 +85,23 @@ func Dispatch(w http.ResponseWriter, request *http.Request) {
 
 		const UPLOAD_KEY = "UPLOAD"
 
-		fh := request.MultipartForm.File[UPLOAD_KEY]
+		list, ok := request.MultipartForm.File[UPLOAD_KEY]
 
-		f, err := fh[0].Open()
+		for k := range request.MultipartForm.File {
+			dispatchLog.Debugf("key %s", k)
+		}
+
+		if !ok {
+			HttpAndLogError(fmt.Sprintf("no such key %s", UPLOAD_KEY), &dispatchLog, w)
+			return
+		}
+
+		if len(list) <= 0 {
+			HttpAndLogError("file list 0", &dispatchLog, w)
+			return
+		}
+
+		f, err := list[0].Open()
 
 		if err != nil {
 			HttpAndLogError(fmt.Sprintf("error open multi part:%s", err), &dispatchLog, w)

@@ -1,0 +1,64 @@
+<!doctype html>
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+
+    <title>Demo Page for Universal P2P</title>
+    <script src="js/jquery-2.2.4.min.js"></script>
+
+    <link href="css/video-js.min.css" rel="stylesheet">
+    <script src="js/video.min.js"></script>
+    <link href="css/universal_p2p.css" rel="stylesheet">
+    <script src="js/universal_p2p.js"></script>
+  </head>
+
+  <body>
+
+
+
+
+
+
+
+    <h1>This is Demo Page to show power of Universal P2P</h1>
+
+
+
+
+
+
+    <iframe id="hidden_iframe" name="uploadTrg" height="0" width="0" frameborder="0" scrolling="yes"></iframe>
+
+
+    <form class="box" id="torrent_form" action="http://127.0.0.1:7788/bittorrent/v0/torrent_form" 
+      method="post" enctype="multipart/form-data" target="uploadTrg">
+      <div class="box__input">
+        <input class="box__file" id="UPLOAD" type="file" name="UPLOAD" multiple=""/>
+        <label for="UPLOAD"><strong>Choose a torrent</strong><span class="box__dragndrop"> or drag it here</span>.</label>
+      </div>
+
+      <div class="box__uploading">Uploading&hellip;</div>
+      <div class="box__success">Done!</div>
+      <div class="box__error">Error! <span></span>.</div>
+    </form>
+
+    <div id="torrent_all_status">
+    </div>
+
+    <div id="torrent_single_status">
+    </div>
+
+    <img id="img"></img>
+
+    <audio id="audio" style="display:none;" class="video-js vjs-default-skin" controls><source></source></audio>
+
+    <video id="video" class="video-js vjs-default-skin"
+           style="display:none;"
+           controls width="640" height="264">
+      <source></source>
+        <p class="vjs-no-js">To view this video please enable JavaScript, and consider upgrading to a web browser that <a href="http://videojs.com/html5-video-support/" target="_blank">supports HTML5 video</a></p>
+    </video>
+
+  </body>
+</html>
