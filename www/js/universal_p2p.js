@@ -26,6 +26,22 @@ var isAdvancedUpload = function() {
     && 'FormData' in window && 'FileReader' in window;}();
 
 function init(){
+
+  $("html").on("dragover", function(event) {
+    event.preventDefault();  
+    event.stopPropagation();
+  });
+
+  $("html").on("dragleave", function(event) {
+    event.preventDefault();  
+    event.stopPropagation();
+  });
+
+  $("html").on("drop", function(event) {
+    event.preventDefault();  
+    event.stopPropagation();
+  });
+
   
   $("#hidden_iframe").load(function() {
     alert("complete");
@@ -35,16 +51,43 @@ function init(){
     $("#torrent_form").submit()
   });
 
-  $("#torrent_form").on("drop",function(e){
-    onTorrent(e.originalEvent.dataTransfer.files);
-  });
 
+
+
+  [ 'drag', 'dragstart', 'dragend', 'dragover', 'dragenter', 'dragleave', 'drop' ].forEach( function( event )
+      {
+        $("#torrent_form").bind( event, function( e )
+            {
+              // preventing the unwanted behaviours
+              e.preventDefault();
+              e.stopPropagation();
+            });
+      });
+  [ 'dragover', 'dragenter' ].forEach( function( event )
+      {
+        $("#torrent_form").bind( event, function()
+            {
+              $("#torrent_form").addClass( 'is-dragover' );
+            });
+      });
+  [ 'dragleave', 'dragend', 'drop' ].forEach( function( event )
+      {
+        $("#torrent_form").bind( event, function()
+            {
+              $("#torrent_form").removeClass( 'is-dragover' );
+            });
+      });
+
+  $("#torrent_form").bind( 'drop', function( e )
+      {
+        onTorrent( e.originalEvent.dataTransfer.files);
+      });
 
 
   if (isAdvancedUpload) {
     $("#torrent_form").addClass('has-advanced-upload');
   }
-  
+
 }
 
 $(function(){

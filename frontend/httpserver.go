@@ -5,6 +5,7 @@ import (
 	"github.com/tylerb/graceful"
 	"github.com/zeronetscript/universal_p2p/backend"
 	"net/http"
+	"path"
 	"strconv"
 	"time"
 )
@@ -22,6 +23,10 @@ func StartHttpServer() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", Dispatch)
+
+	fs := http.FileServer(http.Dir(path.Join(backend.GlobalConfig.RunningDir, "www")))
+
+	mux.Handle("/www/", http.StripPrefix("/www/", fs))
 
 	host := "127.0.0.1"
 	port := 7788

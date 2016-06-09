@@ -28,14 +28,14 @@
 
 
 
-    <iframe id="hidden_iframe" name="uploadTrg" height="0" width="0" frameborder="0" scrolling="yes"></iframe>
+    <iframe id="hidden_iframe"  height="0" width="0" frameborder="0" scrolling="yes"></iframe>
 
 
-    <form class="box" id="torrent_form" action="http://127.0.0.1:7788/bittorrent/v0/torrent_form" 
+    <form class="box js" id="torrent_form" action="http://127.0.0.1:7788/bittorrent/v0/add_torrent" 
       method="post" enctype="multipart/form-data" target="uploadTrg">
       <div class="box__input">
-        <input class="box__file" id="UPLOAD" type="file" name="UPLOAD" multiple=""/>
-        <label for="UPLOAD"><strong>Choose a torrent</strong><span class="box__dragndrop"> or drag it here</span>.</label>
+        <input class="box__file" id="torrent_input" type="file" name="UPLOAD" multiple=""/>
+        <label for="torrent_input"><strong>Choose a torrent</strong><span class="box__dragndrop"> or drag it here</span>.</label>
       </div>
 
       <div class="box__uploading">Uploading&hellip;</div>
