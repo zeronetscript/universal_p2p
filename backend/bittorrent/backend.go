@@ -469,18 +469,23 @@ func (this *Backend) getLastAccessPath() string {
 	return path.Join(this.getInfosPath(), "lastAccess.json")
 }
 
-func (this *Backend) AddTorrent(mi *metainfo.MetaInfo) error {
+func (this *Backend) AddTorrent(mi *metainfo.MetaInfo) (*Resource, error) {
 	this.RwLock.Lock()
 	defer this.RwLock.Unlock()
 
 	t, err := this.Client.AddTorrent(mi)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	this.renameAddTorrent(t)
+	originalName := t.Name()
+	t = this.renameAddTorrent(t)
 
-	return nil
+	hash := t.InfoHash().HexString()
+
+	res := CreateFromTorrent(t, originalName, this.Resources[hash])
+	this.Resources[hash] = res
+	return res, nil
 
 }
 

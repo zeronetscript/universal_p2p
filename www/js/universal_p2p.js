@@ -1,22 +1,43 @@
 'use strict';
+var parseTorrentFile = require('parse-torrent-file')
 
 function isTorrentFile (file) {
   return file.name.toLowerCase().endsWith('.torrent')
+}
+
+function submitTorrentComplete(response){
+
+  $("#command_log").append(response)
+
+
+}
+
+function receiveMessage(event)
+{
+
 }
 
 function onTorrent(files) {
   console.log('got files');
 
   if(!isTorrentFile(files[0]) || files.length>1){
-    alert("you must only select 1 .torrent file")
+    alert("you must only select 1 .torrent file");
     return;
   }
   
   //send form data
-  
-  $("#torrent_input").prop("files",files)
-  $("#torrent_form").submit()
+  var data = new FormData();
+  data.append("UPLOAD",files[0]);
 
+  $.ajax({
+    url: window.location.origin+"/bittorrent/v0/add_torrent",
+    data:data,
+    cache:false,
+    contentType:false,
+    processData:false,
+    type:'POST',
+    success:submitTorrentComplete
+  });
 
 }
 
@@ -44,11 +65,12 @@ function init(){
 
   
   $("#hidden_iframe").load(function() {
-    alert("complete");
+    var p = $(this).contentDocument
+    parent.postMessage("")
    });
 
   $("#torrent_input").change(function(){
-    $("#torrent_form").submit()
+    onTorrent($("#torrent_input").prop("files"));
   });
 
 
@@ -80,13 +102,15 @@ function init(){
 
   $("#torrent_form").bind( 'drop', function( e )
       {
-        onTorrent( e.originalEvent.dataTransfer.files);
+        $("#torrent_input").prop("files",e.originalEvent.dataTransfer.files);
       });
 
 
   if (isAdvancedUpload) {
     $("#torrent_form").addClass('has-advanced-upload');
   }
+
+  window.addEventListener("message",receiveMessage,false);
 
 }
 

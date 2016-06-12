@@ -197,19 +197,25 @@ func check1Arg(writeResponse bool, w http.ResponseWriter, subPath []string) bool
 
 func (this *Frontend) addTorrent(w http.ResponseWriter, u *backend.UploadDataRequest) {
 
-	metaInfo, err := metainfo.Load(u.UploadReader)
-	if err != nil {
-		frontend.HttpAndLogError(fmt.Sprintf("this is not a torrent file :%s", err), &log, w)
+	metaInfo, er := metainfo.Load(u.UploadReader)
+	if er != nil {
+		frontend.HttpAndLogError(fmt.Sprintf("this is not a torrent file :%s", er), &log, w)
 		return
 	}
 
-	err = this.backend.AddTorrent(metaInfo)
+	res, err := this.backend.AddTorrent(metaInfo)
 	if err != nil {
 		frontend.HttpAndLogError(fmt.Sprintf("error adding torrent:%s", err), &log, w)
 		return
 	}
 	log.Debugf("adding torrent complete")
-	this.Status(w, []string{metaInfo.Info.Hash().HexString()})
+
+	jsonMap := infoRootRes(res, true)
+
+	enc := json.NewEncoder(w)
+
+	enc.Encode(jsonMap)
+
 }
 
 func (this *Frontend) getTorrent(w http.ResponseWriter, req *http.Request, a *backend.AccessRequest) {

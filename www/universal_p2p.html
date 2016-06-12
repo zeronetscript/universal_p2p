@@ -10,7 +10,7 @@
     <link href="css/video-js.min.css" rel="stylesheet">
     <script src="js/video.min.js"></script>
     <link href="css/universal_p2p.css" rel="stylesheet">
-    <script src="js/universal_p2p.js"></script>
+    <script src="js/bundle.js"></script>
   </head>
 
   <body>
@@ -26,9 +26,6 @@
 
 
 
-
-
-    <iframe id="hidden_iframe"  height="0" width="0" frameborder="0" scrolling="yes"></iframe>
 
 
     <form class="box js" id="torrent_form" action="http://127.0.0.1:7788/bittorrent/v0/add_torrent" 
@@ -47,6 +44,9 @@
     </div>
 
     <div id="torrent_single_status">
+    </div>
+
+    <div id="command_log">
     </div>
 
     <img id="img"></img>
