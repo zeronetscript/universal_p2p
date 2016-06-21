@@ -10,9 +10,8 @@ import (
 type Resource struct {
 	lastAccess time.Time
 	//for root
-	Torrent      *torrent.Torrent
-	OriginalName *string
-	SubFile      *torrent.File
+	Torrent *torrent.Torrent
+	SubFile *torrent.File
 	//key is path
 	SubResources *map[string]*Resource
 	rootRes      *Resource
@@ -23,7 +22,6 @@ func (this *Resource) UnmarshalJSON(data []byte) error {
 
 	type Aux struct {
 		SubResources *map[string]*Aux
-		OriginalName *string
 		Path         *string
 		LastAccess   time.Time
 	}
@@ -34,10 +32,12 @@ func (this *Resource) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	this.OriginalName = aux.OriginalName
 	this.lastAccess = aux.LastAccess
 
 	if aux.SubResources != nil && len(*aux.SubResources) != 0 {
+
+		this.Torrent = invalidTorrent
+
 		tmp := make(map[string]*Resource)
 		this.SubResources = &tmp
 		for k, v := range *aux.SubResources {
@@ -66,25 +66,23 @@ func (this *Resource) MarshalJSON() ([]byte, error) {
 	//for root
 	return json.Marshal(&struct {
 		SubResources *map[string]*Resource
-		OriginalName string
 		LastAccess   time.Time
 	}{
 		SubResources: this.SubResources,
-		OriginalName: *this.OriginalName,
 		LastAccess:   this.lastAccess,
 	})
 
 }
 
-func CreateFromTorrent(t *torrent.Torrent,
-	originalName string, historyRoot *Resource) *Resource {
+var NEVER_ACCESSED = time.Unix(0, 0)
+
+func CreateFromTorrent(t *torrent.Torrent, historyRoot *Resource) *Resource {
 	//TODO loads lastAccess from serialized
 
-	log.Debugf("create resource wrapper for torrent %s", originalName)
+	log.Debugf("create resource wrapper for torrent %s", t.Name())
 
 	root := &Resource{
-		Torrent:      t,
-		OriginalName: &originalName,
+		Torrent: t,
 	}
 
 	if historyRoot != nil {
@@ -97,14 +95,15 @@ func CreateFromTorrent(t *torrent.Torrent,
 	tmp := make(map[string]*Resource)
 	root.SubResources = &tmp
 
-	for i, v := range t.Files() {
+	for i, v := range t.Info().UpvertedFiles() {
 
-		log.Debugf("create sub resource for torrent %s,%s", t, t.Files()[i].DisplayPath())
+		log.Debugf("create sub resource for torrent %s,%s", t.Name(), v.Path)
 
 		sub := &Resource{
 			//makes it old
 			SubFile: &t.Files()[i],
 			rootRes: root,
+			Torrent: invalidTorrent,
 		}
 		(*root.SubResources)[v.DisplayPath()] = sub
 
@@ -117,7 +116,7 @@ func CreateFromTorrent(t *torrent.Torrent,
 			}
 		}
 
-		sub.lastAccess = time.Unix(0, 0)
+		sub.lastAccess = NEVER_ACCESSED
 	}
 
 	return root
@@ -149,11 +148,10 @@ func (this *Resource) LastAccess() time.Time {
 	return this.lastAccess
 }
 
+var invalidTorrent = &torrent.Torrent{}
+
 func (this *Resource) IsRoot() bool {
-	//use OriginalName instead of Torrent
-	//because when load from lastAccess.json,
-	//we do not have Torrent variable, only OriginalName
-	return this.OriginalName != nil
+	return this.Torrent != invalidTorrent
 }
 
 func (this *Resource) RootURL() string {
