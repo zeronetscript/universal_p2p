@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/anacrolix/torrent"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -105,12 +106,15 @@ func CreateFromTorrent(t *torrent.Torrent, historyRoot *Resource) *Resource {
 			rootRes: root,
 			Torrent: invalidTorrent,
 		}
-		(*root.SubResources)[v.DisplayPath()] = sub
+
+		joined := strings.Join(v.Path, backend.SLASH)
+
+		(*root.SubResources)[joined] = sub
 
 		if historyRoot != nil {
-			subHistory := (*historyRoot.SubResources)[v.DisplayPath()]
+			subHistory := (*historyRoot.SubResources)[joined]
 			if subHistory != nil {
-				log.Tracef("found sub history %s", v.DisplayPath())
+				log.Tracef("found sub history %s", joined)
 				sub.lastAccess = subHistory.lastAccess
 				continue
 			}
