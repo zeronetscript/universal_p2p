@@ -74,6 +74,8 @@ func (this *Resource) MarshalJSON() ([]byte, error) {
 
 }
 
+var NEVER_ACCESSED = time.Unix(0, 0)
+
 func CreateFromTorrent(t *torrent.Torrent, historyRoot *Resource) *Resource {
 	//TODO loads lastAccess from serialized
 
@@ -93,14 +95,15 @@ func CreateFromTorrent(t *torrent.Torrent, historyRoot *Resource) *Resource {
 	tmp := make(map[string]*Resource)
 	root.SubResources = &tmp
 
-	for i, v := range t.Files() {
+	for i, v := range t.Info().UpvertedFiles() {
 
-		log.Debugf("create sub resource for torrent %s,%s", t, t.Files()[i].DisplayPath())
+		log.Debugf("create sub resource for torrent %s,%s", t.Name(), v.Path)
 
 		sub := &Resource{
 			//makes it old
 			SubFile: &t.Files()[i],
 			rootRes: root,
+			Torrent: invalidTorrent,
 		}
 		(*root.SubResources)[v.DisplayPath()] = sub
 
@@ -113,7 +116,7 @@ func CreateFromTorrent(t *torrent.Torrent, historyRoot *Resource) *Resource {
 			}
 		}
 
-		sub.lastAccess = time.Unix(0, 0)
+		sub.lastAccess = NEVER_ACCESSED
 	}
 
 	return root

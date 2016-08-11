@@ -354,6 +354,10 @@ func (this *Backend) loadSaved() {
 	er = loadLastAccessFile(&this.Resources, this.getLastAccessPath())
 	if er != nil {
 		log.Errorf("ignore last access history,error :%s", er)
+	} else {
+		for k, _ := range this.Resources {
+			log.Tracef("access history :%s loaded", k)
+		}
 	}
 
 	torrentsPath := this.getTorrentsPath()
@@ -391,10 +395,24 @@ func (this *Backend) loadSaved() {
 	//delete every access history which do not have corresponding torrent
 	for k, v := range this.Resources {
 		if v.Torrent == nil {
-			log.Tracef("history %s not have corresponding torrent ", *v.OriginalName)
+			log.Tracef("history %s not have corresponding torrent ", v.Torrent.Name())
 			delete(this.Resources, k)
 		}
 	}
+
+	this.IterateRootResources(func(v backend.P2PResource) bool {
+
+		res := v.(*Resource)
+
+		for _, f := range *res.SubResources {
+			if f.LastAccess() != NEVER_ACCESSED {
+				f.SubFile.Download()
+			}
+		}
+
+		return false
+
+	})
 
 	this.recycle()
 
