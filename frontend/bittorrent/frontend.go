@@ -33,7 +33,7 @@ func (this *Frontend) SubVersion() string {
 
 func getLargest(rootRes *bittorrent.Resource) *torrent.File {
 
-	log.Debugf("getting larget file from %s", *rootRes.OriginalName)
+	log.Debugf("getting larget file from %s", rootRes.Torrent.Name())
 
 	var target torrent.File
 	var maxSize int64
@@ -126,7 +126,7 @@ func infoRootRes(res *bittorrent.Resource, full bool) (ret map[string]interface{
 
 	ret = make(map[string]interface{})
 	ret["hash"] = res.Torrent.InfoHash().HexString()
-	ret["name"] = *res.OriginalName
+	ret["name"] = res.Torrent.Name()
 	ret["bytes_completed"] = res.Torrent.BytesCompleted()
 	ret["length"] = res.Torrent.Length()
 
@@ -249,7 +249,7 @@ func (this *Frontend) getTorrent(w http.ResponseWriter, req *http.Request, a *ba
 
 	rd := bytes.NewReader(bin)
 
-	http.ServeContent(w, req, *res.OriginalName+".torrent", time.Now(), rd)
+	http.ServeContent(w, req, res.Torrent.Name()+".torrent", time.Now(), rd)
 }
 
 func (this *Frontend) HandleRequest(w http.ResponseWriter, r *http.Request, request interface{}) {

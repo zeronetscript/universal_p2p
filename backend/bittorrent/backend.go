@@ -80,7 +80,7 @@ func NewBittorrentBackend() *Backend {
 
 var log = loggo.GetLogger("bittorrent")
 
-func (this *Backend) saveAndRename(t *torrent.Torrent) *torrent.Torrent {
+func (this *Backend) save(t *torrent.Torrent) {
 
 	metaDir := this.getSingleMetaPath(t.InfoHash().HexString())
 
@@ -99,7 +99,7 @@ func (this *Backend) saveAndRename(t *torrent.Torrent) *torrent.Torrent {
 		if err != nil {
 			log.Errorf("create file %s failed: %s", torrentPath, err)
 			//ignore torrent not save problem
-			return t
+			return
 		}
 
 		log.Debugf("create file %s ", torrentPath)
@@ -112,23 +112,6 @@ func (this *Backend) saveAndRename(t *torrent.Torrent) *torrent.Torrent {
 	} else {
 		log.Errorf("error creating torrent path %s", metaDir)
 	}
-
-	return this.renameAddTorrent(t)
-
-}
-
-func (this *Backend) renameAddTorrent(t *torrent.Torrent) *torrent.Torrent {
-	renameTorrent(t)
-	newT, _ := this.Client.AddTorrent(t.Metainfo())
-	return newT
-}
-
-//rename torrent name to info hash, info must be got first
-func renameTorrent(t *torrent.Torrent) {
-
-	log.Tracef("renaming name from %s to %s", t.Info().Name, t.InfoHash().HexString())
-	//naming it folder as info hash to avoid clash
-	t.Info().Name = t.InfoHash().HexString()
 
 }
 
@@ -185,10 +168,9 @@ func (this *Backend) AddTorrentHashOrSpec(hashOrSpec interface{}) (*Resource, er
 		if !new && t.Info() != nil {
 			log.Debugf("other goroutine is also adding %s, we not save torrent,only return resource from it", hashHexString)
 
-			originalName := t.Name()
-			t = this.saveAndRename(t)
+			this.save(t)
 
-			ret := CreateFromTorrent(t, originalName, this.Resources[hashHexString])
+			ret := CreateFromTorrent(t, this.Resources[hashHexString])
 			return ret, nil
 		}
 
@@ -201,14 +183,13 @@ func (this *Backend) AddTorrentHashOrSpec(hashOrSpec interface{}) (*Resource, er
 
 	log.Tracef("wLock")
 	this.RwLock.Lock()
-	originalName := t.Name()
-	t = this.saveAndRename(t)
+	this.save(t)
 	log.Debugf("torrent downloaded...")
 	defer func() {
 		log.Tracef("wunLock")
 		this.RwLock.Unlock()
 	}()
-	ret := CreateFromTorrent(t, originalName, this.Resources[hashHexString])
+	ret := CreateFromTorrent(t, this.Resources[hashHexString])
 	this.Resources[hashHexString] = ret
 
 	return ret, nil
@@ -274,10 +255,8 @@ func (this *Backend) loadSingleTorrent(dirPath string, wg *sync.WaitGroup) {
 		return
 	}
 
-	originalName := t.Name()
-	renameTorrent(t)
-	this.Resources[t.InfoHash().HexString()] =
-		CreateFromTorrent(t, originalName, this.Resources[t.InfoHash().HexString()])
+	res := CreateFromTorrent(t, this.Resources[t.InfoHash().HexString()])
+	this.Resources[t.InfoHash().HexString()] = res
 
 }
 
@@ -324,7 +303,7 @@ func (this *Backend) recycle() {
 
 		if keep {
 			totalSize += v.DiskUsage()
-			log.Debugf("sumrize %s size %d,total %d", *v.OriginalName, v.DiskUsage(), totalSize)
+			log.Debugf("sumrize %s size %d,total %d", v.Torrent.Name(), v.DiskUsage(), totalSize)
 			if totalSize > MAX_KEEP_FILE_SIZE {
 				//delete all after this
 				keep = false
@@ -340,7 +319,7 @@ func (this *Backend) recycle() {
 
 			os.RemoveAll(dataPath)
 		} else {
-			log.Debugf("keeping %s", *v.OriginalName)
+			log.Debugf("keeping %s", v.Torrent.Name())
 		}
 	}
 
@@ -478,12 +457,9 @@ func (this *Backend) AddTorrent(mi *metainfo.MetaInfo) (*Resource, error) {
 		return nil, err
 	}
 
-	originalName := t.Name()
-	t = this.renameAddTorrent(t)
-
 	hash := t.InfoHash().HexString()
 
-	res := CreateFromTorrent(t, originalName, this.Resources[hash])
+	res := CreateFromTorrent(t, this.Resources[hash])
 	this.Resources[hash] = res
 	return res, nil
 
