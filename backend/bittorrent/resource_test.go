@@ -19,8 +19,6 @@ func TestSaveLoad(t *testing.T) {
 
 	now := time.Now()
 
-	str := "abc.mp4"
-
 	var to torrent.Torrent
 
 	sub := &Resource{
@@ -34,7 +32,6 @@ func TestSaveLoad(t *testing.T) {
 
 	res := Resource{
 		Torrent:      &to,
-		OriginalName: &str,
 		lastAccess:   now,
 		SubResources: &tmp,
 	}
@@ -59,8 +56,6 @@ func TestSaveLoad(t *testing.T) {
 	v, ok := (loaded)[infoHash]
 
 	assert.Equal(t, ok, true, "should load")
-
-	assert.Equal(t, *v.OriginalName, str)
 
 	assert.NotEmpty(t, v.SubResources)
 
