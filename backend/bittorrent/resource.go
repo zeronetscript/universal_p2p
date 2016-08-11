@@ -3,6 +3,7 @@ package bittorrent
 import (
 	"encoding/json"
 	"github.com/anacrolix/torrent"
+	"github.com/zeronetscript/universal_p2p/backend"
 	"os"
 	"strings"
 	"time"

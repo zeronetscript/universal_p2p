@@ -73,6 +73,8 @@ func (this *Frontend) Stream(w http.ResponseWriter,
 
 	var subRes *bittorrent.Resource
 
+	var pathInArchive []string
+
 	if len(access.SubPath) == 1 {
 		//ask for largest file in torrent
 		this.backend.IterateSubResources(rootRes, func(res backend.P2PResource) bool {
@@ -93,10 +95,14 @@ func (this *Frontend) Stream(w http.ResponseWriter,
 		subRes = (*rootRes.SubResources)[strings.Join(access.SubPath[1:], backend.SLASH)]
 
 		if subRes == nil {
-			errStr := fmt.Sprintf("no such file %s", access.SubPath)
-			log.Errorf(errStr)
-			http.Error(w, errStr, 404)
-			return
+			subRes, pathInArchive = bittorrent.MatchResource(*rootRes.SubResources, access.SubPath[1:])
+
+			if subRes == nil {
+				errStr := fmt.Sprintf("no such file %s", access.SubPath)
+				log.Errorf(errStr)
+				http.Error(w, errStr, 404)
+				return
+			}
 		}
 
 	}
@@ -108,6 +114,11 @@ func (this *Frontend) Stream(w http.ResponseWriter,
 	f.Download()
 
 	reader, err := NewFileReader(f)
+
+	if pathInArchive != nil {
+
+		//TODO streaming file inside archive
+	}
 
 	defer func() {
 		if err := reader.Close(); err != nil {
