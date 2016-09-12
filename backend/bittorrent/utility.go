@@ -3,8 +3,6 @@ package bittorrent
 import (
 	"github.com/anacrolix/torrent"
 	"github.com/anacrolix/torrent/metainfo"
-	"github.com/zeronetscript/universal_p2p/backend"
-	"strings"
 )
 
 func HexString(hashOrSpec interface{}) string {
@@ -46,19 +44,4 @@ func ParseHashOrSpec(str string) (interface{}, error) {
 	}
 
 	return spec, nil
-}
-
-func MatchResource(resMap map[string]*Resource, accessPath []string) (*Resource, []string) {
-
-	//match longest file path
-	for i := len(accessPath); i > 0; i-- {
-		joined := strings.Join(accessPath[0:i], backend.SLASH)
-
-		res := resMap[joined]
-		if res != nil {
-			return res, accessPath[i:]
-		}
-	}
-
-	return nil, nil
 }

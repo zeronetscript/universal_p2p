@@ -95,14 +95,17 @@ func (this *Frontend) Stream(w http.ResponseWriter,
 		subRes = (*rootRes.SubResources)[strings.Join(access.SubPath[1:], backend.SLASH)]
 
 		if subRes == nil {
-			subRes, pathInArchive = bittorrent.MatchResource(*rootRes.SubResources, access.SubPath[1:])
+			var r interface{}
+			r, pathInArchive = backend.MatchResource(rootRes.GetGenericSubResourceMap(), access.SubPath[1:])
 
-			if subRes == nil {
+			if r == nil {
 				errStr := fmt.Sprintf("no such file %s", access.SubPath)
 				log.Errorf(errStr)
 				http.Error(w, errStr, 404)
 				return
 			}
+
+			subRes = r.(*Resource)
 		}
 
 	}

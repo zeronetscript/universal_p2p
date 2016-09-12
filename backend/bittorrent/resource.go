@@ -20,6 +20,16 @@ type Resource struct {
 	path         *string
 }
 
+func (this *Resource) GetGenericSubResourceMap() map[string]interface{} {
+	ret := make(map[string]interface{})
+
+	for k, v := range *this.SubResources {
+		ret[k] = v
+	}
+
+	return ret
+}
+
 func (this *Resource) UnmarshalJSON(data []byte) error {
 
 	type Aux struct {
